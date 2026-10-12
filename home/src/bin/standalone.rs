@@ -18,8 +18,12 @@ use embassy_time::{Duration, Ticker, WithTimeout};
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    efuse, gpio::Output, interrupt::software::SoftwareInterruptControl, peripherals::WIFI,
-    rng::Rng, timer::timg::TimerGroup,
+    efuse,
+    gpio::{Level, Output, OutputConfig},
+    interrupt::software::SoftwareInterruptControl,
+    peripherals::WIFI,
+    rng::Rng,
+    timer::timg::TimerGroup,
 };
 use esp_println::logger;
 use esp_radio::wifi::{
@@ -348,6 +352,20 @@ async fn main(spawner: Spawner) {
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
     esp_alloc::heap_allocator!(size: 128 * 1024);
+
+    // Seeed XIAO ESP32-C6: the RF switch is only powered while GPIO3 is low,
+    // and GPIO14 low selects the on-board ceramic antenna.
+    // Without this the radio barely reaches the access point.
+    core::mem::forget(Output::new(
+        peripherals.GPIO3,
+        Level::Low,
+        OutputConfig::default(),
+    ));
+    core::mem::forget(Output::new(
+        peripherals.GPIO14,
+        Level::Low,
+        OutputConfig::default(),
+    ));
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
