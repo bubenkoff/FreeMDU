@@ -23,9 +23,9 @@ use alloc::{
     string::{String, ToString},
 };
 use bitflags_derive::{FlagsDebug, FlagsDisplay};
-use core::{str, time::Duration};
+use core::{str, str::FromStr, time::Duration};
 use embedded_io_async::{Read, Write};
-use strum::{Display, FromRepr};
+use strum::{Display, EnumMessage, EnumString, FromRepr};
 
 macro_rules! compatible_software_ids {
     () => {
@@ -123,112 +123,152 @@ const PROP_WATER_LEVEL: Property = Property {
 ///
 /// Different modes can be entered by pressing specific button combinations
 /// when turning on the machine.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum OperatingState {
     /// The door is open. Washing programs cannot be started.
+    #[strum(message = "Door open")]
     DoorOpen,
     /// Default mode when the machine is turned on.
+    #[strum(message = "Ready")]
     ProgramIdle,
     /// A washing program is currently running.
+    #[strum(message = "Running")]
     ProgramRunning,
     /// The washing program has finished.
+    #[strum(message = "Finished")]
     ProgramFinished,
     /// Service programming mode, providing access to all machine and program options.
     ///
     /// Entered by holding the _Delay start h/min_ and _Water plus_ buttons
     /// when turning on the machine.
+    #[strum(message = "Service programming")]
     ServiceProgramming,
     /// Customer programming mode, with a limited subset of the service programming options.
     ///
     /// Entered by holding the _Intensive_/_Short_ and _Water plus_ buttons when turning on the machine.
+    #[strum(message = "Customer programming")]
     CustomerProgramming,
     /// Service mode. Allows viewing stored faults and testing actuators.
     ///
     /// Entered by holding the _Delay start h/min_ and _Intensive_/_Short_ buttons
     /// when turning on the machine.
+    #[strum(message = "Service mode")]
     Service,
 }
 
 /// Washing machine program.
 ///
 /// Each variant represents a position of the machine's program selector knob.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Program {
     /// Finish position (no program selected).
+    #[strum(message = "Finish")]
     Finish,
     /// Cottons program, 95 °C.
+    #[strum(message = "Cottons 95 °C")]
     Cottons95,
     /// Cottons program, 75 °C.
+    #[strum(message = "Cottons 75 °C")]
     Cottons75,
     /// Cottons program, 60 °C.
+    #[strum(message = "Cottons 60 °C")]
     Cottons60,
     /// Cottons program, 40 °C.
+    #[strum(message = "Cottons 40 °C")]
     Cottons40,
     /// Cottons program, 30 °C.
+    #[strum(message = "Cottons 30 °C")]
     Cottons30,
     /// Minimum iron program, 60 °C.
+    #[strum(message = "Minimum iron 60 °C")]
     MinimumIron60,
     /// Minimum iron program, 50 °C.
+    #[strum(message = "Minimum iron 50 °C")]
     MinimumIron50,
     /// Minimum iron program, 40 °C.
+    #[strum(message = "Minimum iron 40 °C")]
     MinimumIron40,
     /// Minimum iron program, 30 °C.
+    #[strum(message = "Minimum iron 30 °C")]
     MinimumIron30,
     /// Drain/spin program.
+    #[strum(message = "Drain/spin")]
     DrainSpin,
     /// Separate rinse program.
+    #[strum(message = "Separate rinse")]
     SeparateRinse,
     /// Starch program.
+    #[strum(message = "Starch")]
     Starch,
     /// Mixed wash program, 40 °C.
+    #[strum(message = "Mixed wash 40 °C")]
     MixedWash40,
     /// Quick wash program, 40 °C.
+    #[strum(message = "Quick wash 40 °C")]
     QuickWash40,
     /// Woolens program, cold.
+    #[strum(message = "Woolens cold")]
     WoolensCold,
     /// Woolens program, 30 °C.
+    #[strum(message = "Woolens 30 °C")]
     Woolens30,
     /// Woolens program, 40 °C.
+    #[strum(message = "Woolens 40 °C")]
     Woolens40,
     /// Silks program, 30 °C.
+    #[strum(message = "Silks 30 °C")]
     Silks30,
     /// Delicates program, cold.
+    #[strum(message = "Delicates cold")]
     DelicatesCold,
     /// Delicates program, 30 °C.
+    #[strum(message = "Delicates 30 °C")]
     Delicates30,
     /// Delicates program, 40 °C.
+    #[strum(message = "Delicates 40 °C")]
     Delicates40,
 }
 
 /// Washing program type.
 ///
 /// Represents the general category of a washing program.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum ProgramType {
     /// No program.
+    #[strum(message = "None")]
     None = 0x00,
     /// Cottons program.
+    #[strum(message = "Cottons")]
     Cottons = 0x01,
     /// Minimum iron program.
+    #[strum(message = "Minimum iron")]
     MinimumIron = 0x02,
     /// Delicates program.
+    #[strum(message = "Delicates")]
     Delicates = 0x03,
     /// Woolens program.
+    #[strum(message = "Woolens")]
     Woolens = 0x04,
     /// Quick wash program.
+    #[strum(message = "Quick wash")]
     QuickWash = 0x05,
     /// Starch program.
+    #[strum(message = "Starch")]
     Starch = 0x06,
     /// Drain/spin program.
+    #[strum(message = "Drain/spin")]
     DrainSpin = 0x07,
     /// Separate rinse program.
+    #[strum(message = "Separate rinse")]
     SeparateRinse = 0x09,
     /// Mixed wash program.
+    #[strum(message = "Mixed wash")]
     MixedWash = 0x0a,
     /// Silks program.
+    #[strum(message = "Silks")]
     Silks = 0x0b,
 }
 
@@ -254,24 +294,32 @@ bitflags::bitflags! {
 /// Washing program spin setting.
 ///
 /// The actual spin speed depends on the machine's programming configuration.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum SpinSetting {
     /// No spin.
+    #[strum(message = "No spin")]
     WithoutSpin,
     /// Rinse hold (spin is paused to prevent creasing).
+    #[strum(message = "Rinse hold")]
     RinseHold,
     /// Minimum spin speed.
+    #[strum(message = "Minimum")]
     SpinMin,
     /// Low spin speed.
+    #[strum(message = "Low")]
     SpinLow,
     /// Medium spin speed.
+    #[strum(message = "Medium")]
     SpinMed,
     /// High spin speed.
+    #[strum(message = "High")]
     SpinHigh,
     /// Very high spin speed.
+    #[strum(message = "Very high")]
     SpinVeryHigh,
     /// Maximum spin speed.
+    #[strum(message = "Maximum")]
     SpinMax,
 }
 
@@ -279,36 +327,50 @@ pub enum SpinSetting {
 ///
 /// Phases may not always execute in the defined order and some phases
 /// may be skipped depending on the selected washing program.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum ProgramPhase {
     /// Program has not started yet.
+    #[strum(message = "Not started")]
     Idle,
     /// Program start scheduled with delay start function.
+    #[strum(message = "Delayed start")]
     DelayedStart,
     /// First soak/pre-wash phase.
+    #[strum(message = "Soak/pre-wash 1")]
     SoakPreWash1,
     /// Second soak/pre-wash phase.
+    #[strum(message = "Soak/pre-wash 2")]
     SoakPreWash2,
     /// Main wash phase.
+    #[strum(message = "Main wash")]
     MainWash,
     /// First rinse phase.
+    #[strum(message = "Rinse 1")]
     Rinse1,
     /// Second rinse phase.
+    #[strum(message = "Rinse 2")]
     Rinse2,
     /// Third rinse phase.
+    #[strum(message = "Rinse 3")]
     Rinse3,
     /// Fourth rinse phase.
+    #[strum(message = "Rinse 4")]
     Rinse4,
     /// Fifth rinse phase.
+    #[strum(message = "Rinse 5")]
     Rinse5,
     /// Rinse hold phase.
+    #[strum(message = "Rinse hold")]
     RinseHold,
     /// Drain phase.
+    #[strum(message = "Drain")]
     Drain,
     /// Final spin phase.
+    #[strum(message = "Final spin")]
     FinalSpin,
     /// Anti-crease/finish phase.
+    #[strum(message = "Anti-crease/finish")]
     AntiCreaseFinish,
 }
 
@@ -494,6 +556,21 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
         &mut self.intf
     }
 
+    fn value_name(&self, prop: &Property, val: &Value) -> Option<&'static str> {
+        let Value::String(code) = val else {
+            return None;
+        };
+
+        match *prop {
+            PROP_OPERATING_STATE => OperatingState::from_str(code).ok()?.get_message(),
+            PROP_SELECTED_PROGRAM => Program::from_str(code).ok()?.get_message(),
+            PROP_PROGRAM_TYPE => ProgramType::from_str(code).ok()?.get_message(),
+            PROP_PROGRAM_SPIN_SETTING => SpinSetting::from_str(code).ok()?.get_message(),
+            PROP_PROGRAM_PHASE => ProgramPhase::from_str(code).ok()?.get_message(),
+            _ => None,
+        }
+    }
+
     fn software_id(&self) -> u16 {
         self.software_id
     }
@@ -560,3 +637,58 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
 }
 
 impl<P> private::Sealed for WashingMachine<P> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::{collections::vec_deque::VecDeque, string::ToString};
+
+    #[test]
+    fn value_names() {
+        let dev = WashingMachine {
+            intf: Interface::new(VecDeque::<u8>::new()),
+            software_id: 457,
+        };
+        let name = |prop: &Property, code: &str| dev.value_name(prop, &code.to_string().into());
+
+        assert_eq!(
+            name(&PROP_OPERATING_STATE, "ProgramRunning"),
+            Some("Running")
+        );
+        assert_eq!(
+            name(&PROP_SELECTED_PROGRAM, "QuickWash40"),
+            Some("Quick wash 40 °C")
+        );
+        assert_eq!(
+            name(&PROP_PROGRAM_TYPE, "MinimumIron"),
+            Some("Minimum iron")
+        );
+        assert_eq!(name(&PROP_PROGRAM_SPIN_SETTING, "SpinMax"), Some("Maximum"));
+        assert_eq!(
+            name(&PROP_PROGRAM_PHASE, "AntiCreaseFinish"),
+            Some("Anti-crease/finish")
+        );
+        assert_eq!(name(&PROP_PROGRAM_PHASE, "NoSuchPhase"), None);
+        assert_eq!(
+            dev.value_name(&PROP_TEMPERATURE, &Value::Sensor(19, 0)),
+            None
+        );
+    }
+
+    #[test]
+    fn every_variant_has_a_name() {
+        for repr in 0..=u8::MAX {
+            let names = [
+                OperatingState::from_repr(repr).map(|v| v.get_message()),
+                Program::from_repr(repr).map(|v| v.get_message()),
+                ProgramType::from_repr(repr).map(|v| v.get_message()),
+                SpinSetting::from_repr(repr).map(|v| v.get_message()),
+                ProgramPhase::from_repr(repr).map(|v| v.get_message()),
+            ];
+
+            for name in names.into_iter().flatten() {
+                assert!(name.is_some(), "value {repr:#04x} has no name");
+            }
+        }
+    }
+}

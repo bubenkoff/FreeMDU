@@ -413,6 +413,19 @@ pub trait Device<P: Read + Write>: private::Sealed {
 
     /// Returns a mutable reference to the underlying diagnostic interface.
     fn interface(&mut self) -> &mut Interface<P>;
+
+    /// Returns a human-readable name for a value of the specified property, if the
+    /// device implementation provides one.
+    ///
+    /// [`Device::query_property`] reports enumerated values by their identifiers, e.g.
+    /// `ProgramRunning`, which stay stable for programs that compare against them.
+    /// This returns the matching display name, e.g. `Running`.
+    /// The default implementation provides no names.
+    fn value_name(&self, prop: &Property, val: &Value) -> Option<&'static str> {
+        let _ = (prop, val);
+
+        None
+    }
 }
 
 /// Connects to a device asynchronously, based on the detected software ID.
