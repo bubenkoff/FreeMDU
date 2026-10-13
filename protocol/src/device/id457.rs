@@ -118,6 +118,24 @@ const PROP_WATER_LEVEL: Property = Property {
     name: "Water Level",
     unit: Some("mmH₂O"),
 };
+const PROP_DOOR_LOCKED: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "door_locked",
+    name: "Door Locked",
+    unit: None,
+};
+const PROP_SPINNING: Property = Property {
+    kind: PropertyKind::Io,
+    id: "spinning",
+    name: "Spinning",
+    unit: None,
+};
+const PROP_TACHOMETER_SPEED: Property = Property {
+    kind: PropertyKind::Io,
+    id: "tachometer_speed",
+    name: "Tachometer Speed",
+    unit: Some("rpm"),
+};
 
 /// Washing machine operating state.
 ///
@@ -538,6 +556,47 @@ impl<P: Read + Write> WashingMachine<P> {
 
         Ok((current, target))
     }
+
+    /// Queries whether the door is locked.
+    ///
+    /// The lock closes when a program starts. After the program it opens only when the door
+    /// button is pressed, and the button works once the drum has stopped (see
+    /// [`Self::query_spinning`]): on a Cottons 60 run the lock stayed closed through 31 minutes of
+    /// anti-crease until the button was pressed. So this tells when the door was opened, not
+    /// when it could be.
+    pub async fn query_door_locked(&mut self) -> Result<bool, P::Error> {
+        let state: u8 = self.intf.read_memory(0x0044).await?;
+
+        Ok((state & 0x02) != 0x00)
+    }
+
+    /// Queries whether the drum is spinning: from the start of each spin until the drum has run
+    /// down after it.
+    ///
+    /// The motor control byte reads `0x0c` while a spin is driven, `0x05` while the drum runs
+    /// down and `0x00` otherwise, including the slow tumbling of washing and anti-crease. The
+    /// tachometer reads 0 during the run-down, so this is what tells that the drum has stopped
+    /// after the final spin and the door button will open the door: 50 seconds after
+    /// [`OperatingState::ProgramFinished`] following a 1600 rpm spin, 10 seconds after one held
+    /// at 670 rpm.
+    pub async fn query_spinning(&mut self) -> Result<bool, P::Error> {
+        let state: u8 = self.intf.read_memory(0x0099).await?;
+
+        Ok(state != 0x00)
+    }
+
+    /// Queries the drum speed measured by the tachometer generator and the target speed.
+    ///
+    /// Both are provided in `rpm` (revolutions per minute). The target is set during the final
+    /// spin only; the measured speed also shows the short spins between rinses. A large gap
+    /// between the two during the final spin means the machine is waiting for the load to
+    /// balance. When the program ends, both read 0 while the drum is still running down.
+    pub async fn query_tachometer_speed(&mut self) -> Result<(u16, u16), P::Error> {
+        let current: u16 = self.intf.read_memory(0x01a3).await?;
+        let target: u16 = self.intf.read_memory(0x028a).await?;
+
+        Ok((current, target))
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -593,8 +652,11 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_PHASE,
             PROP_DISPLAY_CONTENTS,
             PROP_ACTIVE_ACTUATORS,
+            PROP_DOOR_LOCKED,
+            PROP_SPINNING,
             PROP_TEMPERATURE,
             PROP_WATER_LEVEL,
+            PROP_TACHOMETER_SPEED,
         ]
     }
 
@@ -623,6 +685,9 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
             PROP_TEMPERATURE => Ok(self.query_temperature().await?.into()),
             PROP_WATER_LEVEL => Ok(self.query_water_level().await?.into()),
+            PROP_DOOR_LOCKED => Ok(self.query_door_locked().await?.into()),
+            PROP_SPINNING => Ok(self.query_spinning().await?.into()),
+            PROP_TACHOMETER_SPEED => Ok(self.query_tachometer_speed().await?.into()),
             _ => Err(Error::UnknownProperty),
         }
     }
