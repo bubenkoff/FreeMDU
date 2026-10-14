@@ -15,6 +15,7 @@ The project is split into three main components:
 - [**Protocol**](protocol): core protocol library and device implementations
 - [**TUI**](tui): terminal-based device diagnostic and testing tool
 - [**Home**](home): communication adapter firmware with MQTT integration for Home Assistant
+- [**ESPHome**](esphome): ESPHome component built on the protocol library, an alternative to the home firmware's standalone mode
 
 More details about the proprietary diagnostic interface and the reverse-engineering process behind this project can be found in this [**blog post**](https://medusalix.github.io/posts/miele-interface).
 
@@ -64,6 +65,8 @@ If you want to repair or test your appliance:
 If you want to integrate your appliance into **Home Assistant** or another home automation system:
 
 1. Flash the [home](home) firmware in **standalone mode** onto your communication adapter and attach it to your device.
+
+   If you already use **ESPHome**, the [ESPHome component](esphome) is an alternative with over-the-air updates and the native Home Assistant API.
 
 ### Building custom tools
 
