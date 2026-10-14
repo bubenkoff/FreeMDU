@@ -1,0 +1,136 @@
+# Device package for washing machines with software ID 132 (Miele W 8xx/9xx, such as the W 925).
+#
+# This software ID reports no operating state; Phase shows where a program is, and Active
+# Actuators what is running. Faults read "Ok", "Active" or "Stored".
+
+packages:
+  freemdu: !include freemdu.yaml
+
+text_sensor:
+  - platform: freemdu
+    property: selected_program
+    format: text
+    id: mdu_program
+    name: Program
+  - platform: freemdu
+    property: program_options
+    format: text
+    id: mdu_options
+    name: Options
+  - platform: freemdu
+    property: program_spin_setting
+    format: text
+    id: mdu_spin_setting
+    name: Spin Setting
+  - platform: freemdu
+    property: program_phase
+    format: text
+    id: mdu_phase
+    name: Phase
+  - platform: freemdu
+    property: active_actuators
+    format: text
+    id: mdu_active_actuators
+    name: Active Actuators
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f1
+    id: mdu_fault_f1_water_level_switch
+    name: Fault F1 Water Level Switch
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f2
+    id: mdu_fault_f2_ntc_thermistor
+    name: Fault F2 NTC Thermistor
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f3
+    id: mdu_fault_f3_heater
+    name: Fault F3 Heater
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f4
+    id: mdu_fault_f4_tachometer
+    name: Fault F4 Tachometer
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f5
+    id: mdu_fault_f5_detergent_overdose
+    name: Fault F5 Detergent Overdose
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f6
+    id: mdu_fault_f6_water_inlet
+    name: Fault F6 Water Inlet
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f7
+    id: mdu_fault_f7_drainage
+    name: Fault F7 Drainage
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f8
+    id: mdu_fault_f8_final_spin_speed
+    name: Fault F8 Final Spin Speed
+    entity_category: diagnostic
+  - platform: freemdu
+    property: fault_f9
+    id: mdu_fault_f9_eeprom
+    name: Fault F9 EEPROM
+    entity_category: diagnostic
+
+sensor:
+  - platform: freemdu
+    property: target_temperature
+    id: mdu_target_temperature
+    name: Target Temperature
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: water_level
+    id: mdu_water_level
+    name: Water Level
+    state_class: measurement
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: water_level
+    value: target
+    id: mdu_water_level_target
+    name: Water Level Target
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: freemdu
+    property: tachometer_speed
+    id: mdu_drum_speed
+    name: Drum Speed
+    unit_of_measurement: rpm
+    state_class: measurement
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: tachometer_speed
+    value: target
+    id: mdu_drum_speed_target
+    name: Drum Speed Target
+    unit_of_measurement: rpm
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: freemdu
+    property: ntc_resistance
+    id: mdu_ntc_resistance
+    name: NTC Resistance
+    unit_of_measurement: "Ω"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: freemdu
+    property: operating_time
+    id: mdu_operating_time
+    name: Operating Time
+    unit_of_measurement: h
+    device_class: duration
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.000277778

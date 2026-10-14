@@ -60,6 +60,7 @@ This is the [example](example/xiao-esp32c6-w471.yaml). The Rust library is inclu
 |---|---|
 | [`xiao-esp32c6.yaml`](packages/xiao-esp32c6.yaml) | Board, ESP-IDF framework, the board LED as a link light (see [Checking the adapter](#checking-the-adapter)), the antenna switch of the XIAO ESP32-C6, and the UART `mdu_uart` on pins `0` (RX) and `1` (TX) |
 | [`id457.yaml`](packages/id457.yaml) | Every property of software ID 457 (Miele W 471). `Operating State` keeps the device's codes for automations; the other text sensors show display names |
+| [`id132.yaml`](packages/id132.yaml) | Every property of software ID 132 (Miele W 8xx/9xx, such as the W 925), including the nine faults. This software ID reports no operating state: Phase shows where a program is, and *Last Program Energy* of the energy package stays unknown, so drop it with `- id: !remove mdu_last_program_energy` |
 | [`energy.yaml`](packages/energy.yaml) | The [energy estimate](#estimating-energy-use) with its three sensors. Variable `heater_power` is required; `running_power`, `standby_power` and `drum_power_per_1000_rpm` are optional |
 | [`freemdu.yaml`](packages/freemdu.yaml) | Included by every device package: the external component, the logger, the hub (polling every 10 s), and the adapter's `Connected`, `Adapter Status`, `Software ID`, `WiFi Signal`, and the `Adapter Test` button with its `Adapter Test Result` |
 
