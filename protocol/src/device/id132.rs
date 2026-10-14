@@ -14,9 +14,9 @@ use crate::device::{
 };
 use alloc::{boxed::Box, string::ToString};
 use bitflags_derive::{FlagsDebug, FlagsDisplay};
-use core::{str, time::Duration};
+use core::{str, str::FromStr, time::Duration};
 use embedded_io_async::{Read, Write};
-use strum::{Display, FromRepr};
+use strum::{Display, EnumMessage, EnumString, FromRepr};
 
 macro_rules! compatible_software_ids {
     () => {
@@ -174,56 +174,80 @@ pub enum FaultCode {
 /// Washing machine program.
 ///
 /// Each variant represents a position of the machine's program selector knob.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Program {
     /// Finish position (no program selected).
+    #[strum(message = "Finish")]
     Finish,
     /// Cottons program, 95 °C.
+    #[strum(message = "Cottons 95 °C")]
     Cottons95,
     /// Cottons program, 75 °C.
+    #[strum(message = "Cottons 75 °C")]
     Cottons75,
     /// Cottons program, 60 °C.
+    #[strum(message = "Cottons 60 °C")]
     Cottons60,
     /// Cottons program, 50 °C.
+    #[strum(message = "Cottons 50 °C")]
     Cottons50,
     /// Cottons program, 40 °C.
+    #[strum(message = "Cottons 40 °C")]
     Cottons40,
     /// Cottons program, 30 °C.
+    #[strum(message = "Cottons 30 °C")]
     Cottons30,
     /// Minimum iron program, 60 °C.
+    #[strum(message = "Minimum iron 60 °C")]
     MinimumIron60,
     /// Minimum iron program, 50 °C.
+    #[strum(message = "Minimum iron 50 °C")]
     MinimumIron50,
     /// Minimum iron program, 40 °C.
+    #[strum(message = "Minimum iron 40 °C")]
     MinimumIron40,
     /// Minimum iron program, 30 °C.
+    #[strum(message = "Minimum iron 30 °C")]
     MinimumIron30,
     /// Delicates program, 60 °C.
+    #[strum(message = "Delicates 60 °C")]
     Delicates60,
     /// Delicates program, 50 °C.
+    #[strum(message = "Delicates 50 °C")]
     Delicates50,
     /// Delicates program, 40 °C.
+    #[strum(message = "Delicates 40 °C")]
     Delicates40,
     /// Delicates program, 30 °C.
+    #[strum(message = "Delicates 30 °C")]
     Delicates30,
     /// Delicates program, cold.
+    #[strum(message = "Delicates cold")]
     DelicatesCold,
     /// Woolens program, 40 °C.
+    #[strum(message = "Woolens 40 °C")]
     Woolens40,
     /// Woolens program, 30 °C.
+    #[strum(message = "Woolens 30 °C")]
     Woolens30,
     /// Woolens program, cold.
+    #[strum(message = "Woolens cold")]
     WoolensCold,
     /// Quick wash program, 40 °C.
+    #[strum(message = "Quick wash 40 °C")]
     QuickWash40,
     /// Starch program.
+    #[strum(message = "Starch")]
     Starch,
     /// Spin program.
+    #[strum(message = "Spin")]
     Spin,
     /// Drain program.
+    #[strum(message = "Drain")]
     Drain,
     /// Separate rinse program.
+    #[strum(message = "Separate rinse")]
     SeparateRinse,
 }
 
@@ -231,37 +255,117 @@ pub enum Program {
 ///
 /// Phases may not always execute in the defined order and some phases
 /// may be skipped depending on the selected washing program.
-#[derive(FromRepr, Display, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(FromRepr, Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum ProgramPhase {
     /// Program has not started yet.
+    #[strum(message = "Not started")]
     Idle,
     /// Program start scheduled with delay start function.
+    #[strum(message = "Delayed start")]
     DelayedStart,
     /// First soak/pre-wash phase.
+    #[strum(message = "Soak/pre-wash 1")]
     SoakPreWash1,
     /// Second soak/pre-wash phase.
+    #[strum(message = "Soak/pre-wash 2")]
     SoakPreWash2,
     /// Main wash phase.
+    #[strum(message = "Main wash")]
     MainWash,
     /// First rinse phase.
+    #[strum(message = "Rinse 1")]
     Rinse1,
     /// Second rinse phase.
+    #[strum(message = "Rinse 2")]
     Rinse2,
     /// Third rinse phase.
+    #[strum(message = "Rinse 3")]
     Rinse3,
     /// Fourth rinse phase.
+    #[strum(message = "Rinse 4")]
     Rinse4,
     /// Fifth rinse phase.
+    #[strum(message = "Rinse 5")]
     Rinse5,
     /// Rinse hold phase.
+    #[strum(message = "Rinse hold")]
     RinseHold,
     /// Drain phase.
+    #[strum(message = "Drain")]
     Drain,
     /// Final spin phase.
+    #[strum(message = "Final spin")]
     FinalSpin,
     /// Anti-crease/finish phase.
+    #[strum(message = "Anti-crease/finish")]
     AntiCreaseFinish,
+}
+
+bitflags::bitflags! {
+    /// Washing program option.
+    ///
+    /// Each flag represents an option button on the front panel of the machine.
+    #[derive(FlagsDisplay, FlagsDebug, PartialEq, Eq, Copy, Clone)]
+    pub struct ProgramOption: u8 {
+        /// Water plus option enabled.
+        const WaterPlus = 0x04;
+        /// Pre-wash option enabled.
+        const PreWash = 0x08;
+        /// Soak option enabled.
+        const Soak = 0x10;
+        /// Intensive or short option enabled.
+        ///
+        /// The actual effect depends on the machine's programming configuration.
+        const IntensiveShort = 0x20;
+    }
+}
+
+/// Washing program spin setting.
+///
+/// Each variant represents a position of the machine's spin speed selector knob.
+#[derive(Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
+pub enum SpinSetting {
+    /// Final spin at 1450 rpm.
+    #[strum(message = "1450 rpm")]
+    Spin1450,
+    /// Final spin at 1200 rpm.
+    #[strum(message = "1200 rpm")]
+    Spin1200,
+    /// Final spin at 900 rpm.
+    #[strum(message = "900 rpm")]
+    Spin900,
+    /// Final spin at 600 rpm.
+    #[strum(message = "600 rpm")]
+    Spin600,
+    /// Final spin at 400 rpm.
+    #[strum(message = "400 rpm")]
+    Spin400,
+    /// Rinse hold (laundry is left in the water of the last rinse).
+    #[strum(message = "Rinse hold")]
+    RinseHold,
+    /// No final spin.
+    #[strum(message = "No final spin")]
+    NoFinalSpin,
+}
+
+impl SpinSetting {
+    /// Decodes the knob position from the spin setting and spin speed values.
+    ///
+    /// Neither value identifies the position alone, so the pairs observed on
+    /// a W 925 are matched as a whole.
+    fn from_raw(setting: u8, speed: u8) -> Option<Self> {
+        match (setting, speed) {
+            (0, 27) => Some(Self::Spin1450),
+            (3, 25) => Some(Self::Spin1200),
+            (6, 22) => Some(Self::Spin900),
+            (5, 18) => Some(Self::Spin600),
+            (15, 15) => Some(Self::Spin400),
+            (9, 27) => Some(Self::RinseHold),
+            (8, 27) => Some(Self::NoFinalSpin),
+            _ => None,
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -394,13 +498,22 @@ impl<P: Read + Write> WashingMachine<P> {
     /// Queries the program options.
     ///
     /// The program options are set using the buttons on the front panel of the machine.
-    pub async fn query_program_options(&mut self) -> Result<u8, P::Error> {
-        Ok(self.intf.read_memory(0x006c).await?)
+    pub async fn query_program_options(&mut self) -> Result<ProgramOption, P::Error> {
+        // Bits that are not known options are kept, so that they show up in the output
+        Ok(ProgramOption::from_bits_retain(
+            self.intf.read_memory(0x006c).await?,
+        ))
     }
 
     /// Queries the program spin setting.
-    pub async fn query_program_spin_setting(&mut self) -> Result<u8, P::Error> {
-        Ok(self.intf.read_memory(0x006d).await?)
+    ///
+    /// The setting is decoded from the values at 0x006d and 0x0059 together,
+    /// the latter of which is also returned by [`Self::query_program_spin_speed`].
+    pub async fn query_program_spin_setting(&mut self) -> Result<SpinSetting, P::Error> {
+        let setting = self.intf.read_memory(0x006d).await?;
+        let speed = self.query_program_spin_speed().await?;
+
+        SpinSetting::from_raw(setting, speed).ok_or(Error::UnexpectedMemoryValue)
     }
 
     /// Queries the program spin speed.
@@ -501,6 +614,19 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
         &mut self.intf
     }
 
+    fn value_name(&self, prop: &Property, val: &Value) -> Option<&'static str> {
+        let Value::String(code) = val else {
+            return None;
+        };
+
+        match *prop {
+            PROP_SELECTED_PROGRAM => Program::from_str(code).ok()?.get_message(),
+            PROP_PROGRAM_SPIN_SETTING => SpinSetting::from_str(code).ok()?.get_message(),
+            PROP_PROGRAM_PHASE => ProgramPhase::from_str(code).ok()?.get_message(),
+            _ => None,
+        }
+    }
+
     fn software_id(&self) -> u16 {
         self.software_id
     }
@@ -582,3 +708,71 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
 }
 
 impl<P> private::Sealed for WashingMachine<P> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::{collections::vec_deque::VecDeque, string::ToString};
+
+    #[test]
+    fn decodes_spin_setting() {
+        assert_eq!(SpinSetting::from_raw(0, 27), Some(SpinSetting::Spin1450));
+        assert_eq!(SpinSetting::from_raw(15, 15), Some(SpinSetting::Spin400));
+        assert_eq!(SpinSetting::from_raw(9, 27), Some(SpinSetting::RinseHold));
+        assert_eq!(SpinSetting::from_raw(8, 27), Some(SpinSetting::NoFinalSpin));
+        assert_eq!(SpinSetting::from_raw(0, 15), None);
+    }
+
+    #[test]
+    fn displays_program_options() {
+        let opts = ProgramOption::from_bits_retain(0x18);
+        assert_eq!(opts.to_string(), "PreWash | Soak");
+        assert_eq!(ProgramOption::empty().to_string(), "");
+    }
+
+    #[test]
+    fn value_names() {
+        let dev = WashingMachine {
+            intf: Interface::new(VecDeque::<u8>::new()),
+            software_id: 132,
+        };
+        let name = |prop: &Property, code: &str| dev.value_name(prop, &code.to_string().into());
+
+        assert_eq!(
+            name(&PROP_SELECTED_PROGRAM, "MinimumIron40"),
+            Some("Minimum iron 40 °C")
+        );
+        assert_eq!(
+            name(&PROP_PROGRAM_SPIN_SETTING, "RinseHold"),
+            Some("Rinse hold")
+        );
+        assert_eq!(name(&PROP_PROGRAM_PHASE, "FinalSpin"), Some("Final spin"));
+        assert_eq!(name(&PROP_PROGRAM_PHASE, "NoSuchPhase"), None);
+        assert_eq!(
+            dev.value_name(&PROP_WATER_LEVEL, &Value::Sensor(1, 2)),
+            None
+        );
+    }
+
+    #[test]
+    fn every_variant_has_a_name() {
+        for repr in 0..=u8::MAX {
+            let names = [
+                Program::from_repr(repr).map(|v| v.get_message()),
+                ProgramPhase::from_repr(repr).map(|v| v.get_message()),
+            ];
+
+            for name in names.into_iter().flatten() {
+                assert!(name.is_some(), "value {repr:#04x} has no name");
+            }
+        }
+
+        for setting in 0..=u8::MAX {
+            for speed in 0..=u8::MAX {
+                if let Some(spin) = SpinSetting::from_raw(setting, speed) {
+                    assert!(spin.get_message().is_some(), "{spin} has no name");
+                }
+            }
+        }
+    }
+}
