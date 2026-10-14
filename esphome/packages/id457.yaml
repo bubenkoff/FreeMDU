@@ -1,0 +1,147 @@
+# Device package for washing machines with software ID 457 (Miele W 471 and relatives).
+#
+# Operating State keeps the device's codes (ProgramIdle, ProgramRunning, …) for automations,
+# because codes do not change when a display name is reworded; every other text sensor shows
+# the display names. Entity names follow the property names of the home firmware, so a device
+# that moves over from it keeps its entity IDs.
+
+packages:
+  freemdu: !include freemdu.yaml
+
+binary_sensor:
+  # On while locked. Not device_class: lock, which Home Assistant reads the other way round
+  - platform: freemdu
+    property: door_locked
+    id: mdu_door_locked
+    name: Door Locked
+    icon: mdi:lock
+  # On from the start of a spin until the drum has run down after it; the drum speed reads 0
+  # during the run-down. Off with Status Finished means the door button will open the door
+  - platform: freemdu
+    property: spinning
+    id: mdu_spinning
+    name: Spinning
+    device_class: moving
+  # The panel's overdose warning (F5): too much foam, seen from the second rinse on until the
+  # door is opened
+  - platform: freemdu
+    property: fault_f5
+    id: mdu_detergent_overdose
+    name: Detergent Overdose
+    device_class: problem
+
+text_sensor:
+  - platform: freemdu
+    property: operating_state
+    id: mdu_operating_state
+    name: Operating State
+    entity_category: diagnostic
+  - platform: freemdu
+    property: operating_state
+    format: text
+    id: mdu_status
+    name: Status
+  - platform: freemdu
+    property: selected_program
+    format: text
+    id: mdu_program
+    name: Program
+  - platform: freemdu
+    property: program_type
+    format: text
+    id: mdu_program_type
+    name: Program Type
+  - platform: freemdu
+    property: program_options
+    format: text
+    id: mdu_options
+    name: Options
+  - platform: freemdu
+    property: program_spin_setting
+    format: text
+    id: mdu_spin_setting
+    name: Spin Setting
+  - platform: freemdu
+    property: program_phase
+    format: text
+    id: mdu_phase
+    name: Phase
+  - platform: freemdu
+    property: display_contents
+    id: mdu_display_contents
+    name: Display Contents
+  - platform: freemdu
+    property: active_actuators
+    format: text
+    id: mdu_active_actuators
+    name: Active Actuators
+    entity_category: diagnostic
+  - platform: freemdu
+    property: manufacturing_date
+    id: mdu_manufacturing_date
+    name: Manufacturing Date
+    entity_category: diagnostic
+
+sensor:
+  - platform: freemdu
+    property: program_temperature
+    id: mdu_program_temperature
+    name: Program Temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: program_spin_speed
+    id: mdu_program_spin_speed
+    name: Program Spin Speed
+    unit_of_measurement: rpm
+    accuracy_decimals: 0
+  # 1 to 5. A program starts with a preset level and about ten minutes into the main wash the
+  # machine puts its own estimate in its place; outside a program the value means nothing
+  - platform: freemdu
+    property: load_level
+    id: mdu_load_level
+    name: Load Level
+    accuracy_decimals: 0
+    icon: mdi:weight
+  # Temperature and water level are placeholders (60 °C, 81) while no program runs
+  - platform: freemdu
+    property: temperature
+    id: mdu_temperature
+    name: Temperature
+    device_class: temperature
+    unit_of_measurement: "°C"
+    state_class: measurement
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: water_level
+    id: mdu_water_level
+    name: Water Level
+    unit_of_measurement: mmH₂O
+    state_class: measurement
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: tachometer_speed
+    id: mdu_drum_speed
+    name: Drum Speed
+    unit_of_measurement: rpm
+    state_class: measurement
+    accuracy_decimals: 0
+  - platform: freemdu
+    property: tachometer_speed
+    value: target
+    id: mdu_drum_speed_target
+    name: Drum Speed Target
+    unit_of_measurement: rpm
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: freemdu
+    property: operating_time
+    id: mdu_operating_time
+    name: Operating Time
+    unit_of_measurement: h
+    device_class: duration
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.000277778

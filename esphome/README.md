@@ -17,11 +17,72 @@ It is an alternative to the **standalone mode** of the [home](../home) firmware 
 
 ### Hardware
 
-The component uses the same communication adapter as the home firmware: an ESP32-C3 or ESP32-C6 and an SFH 7250 infrared emitter and phototransistor, wired as described in the [home README](../home/README.md#getting-started). The RX and TX pins can be any free GPIOs; the [example](example/xiao-esp32c6-w471.yaml) uses pin `0` as RX and `1` as TX like the home firmware.
+The component uses the same communication adapter as the home firmware: an ESP32-C3 or ESP32-C6 and an SFH 7250 infrared emitter and phototransistor, wired as described in the [home README](../home/README.md#getting-started). The RX and TX pins can be any free GPIOs; the [board package](packages/xiao-esp32c6.yaml) uses pin `0` as RX and `1` as TX like the home firmware.
 
 The **ESP32-C6** has been tested, on a Seeed XIAO ESP32-C6 with a Miele W 471 (software ID 457). The ESP32-C3 build links, but has not been tried on hardware yet.
 
-### Installation
+### Installation with packages
+
+Ready-made [packages](packages) cover everything that is the same for every adapter of one kind and every appliance of one software ID: the board and its UART, the component, and an entity for each property with its name, unit and category. A complete configuration for a W 471 on a XIAO ESP32-C6 is then:
+
+```yaml
+esphome:
+  name: washing-machine
+  friendly_name: Washing Machine
+
+packages:
+  freemdu:
+    url: https://github.com/bubenkoff/FreeMDU
+    ref: esphome
+    files:
+      - esphome/packages/xiao-esp32c6.yaml
+      - esphome/packages/id457.yaml
+      - path: esphome/packages/energy.yaml
+        vars:
+          heater_power: 2100W
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption: {}
+```
+
+This is the [example](example/xiao-esp32c6-w471.yaml). The Rust library is included in prebuilt form, so neither ESPHome nor the Home Assistant add-on needs a Rust toolchain.
+
+| Package | Contents |
+|---|---|
+| [`xiao-esp32c6.yaml`](packages/xiao-esp32c6.yaml) | Board, ESP-IDF framework, the board LED as a link light (see [Checking the adapter](#checking-the-adapter)), the antenna switch of the XIAO ESP32-C6, and the UART `mdu_uart` on pins `0` (RX) and `1` (TX) |
+| [`id457.yaml`](packages/id457.yaml) | Every property of software ID 457 (Miele W 471). `Operating State` keeps the device's codes for automations; the other text sensors show display names |
+| [`energy.yaml`](packages/energy.yaml) | The [energy estimate](#estimating-energy-use) with its three sensors. Variable `heater_power` is required; `running_power`, `standby_power` and `drum_power_per_1000_rpm` are optional |
+| [`freemdu.yaml`](packages/freemdu.yaml) | Included by every device package: the external component, the logger, the hub (polling every 10 s), and the adapter's `Connected`, `Adapter Status`, `Software ID`, `WiFi Signal`, and the `Adapter Test` button with its `Adapter Test Result` |
+
+Variables of the common part, set under `substitutions:` in your file or as `vars:` of the device package:
+
+| Variable | Default | Description |
+|---|---|---|
+| `update_interval` | `10s` | How often the appliance is polled. A poll of every property takes a few seconds at 2400 baud; a poll still running when the next is due is skipped |
+| `hold_time` | `30s` | How long values are kept while polls fail, before they turn unknown (see [Hub](#hub)) |
+| `freemdu_url`, `freemdu_ref` | this repository | Where the component is built from, to try a branch |
+| `freemdu_refresh` | `1d` | How often ESPHome fetches the component again. ESPHome keeps git sources for a day, so after a push to the branch you build from, set this to `always` and add `refresh: always` to your `packages:` entry; otherwise the next day's build picks it up |
+
+Anything in a package can be changed in your own file. Options merge into the package's, for example `freemdu: protocol_log: true`. Every entity has an ID starting with `mdu_` (`mdu_status`, `mdu_drum_speed`, …), so it can be changed or dropped from your file:
+
+```yaml
+text_sensor:
+  - id: !extend mdu_program
+    name: Programme
+sensor:
+  - id: !remove mdu_drum_speed_target
+``` A board with other pins needs its own `uart:` block with the ID `mdu_uart` instead of the board package (see [UART](#uart)). For an appliance without a device package, bind the properties yourself, as described in [Configuration](#configuration).
+
+### Installation without packages
 
 Add the component to your device configuration as an external component:
 
@@ -35,7 +96,7 @@ external_components:
     components: [freemdu]
 ```
 
-The Rust library is included in prebuilt form, so neither ESPHome nor the Home Assistant add-on needs a Rust toolchain. The board must use the ESP-IDF framework:
+The board must use the ESP-IDF framework:
 
 ```yaml
 esp32:
@@ -68,7 +129,7 @@ Configuration validation rejects any other baud rate or frame format.
 
 ## Configuration
 
-A complete configuration for a XIAO ESP32-C6 on a W 471 is in [`example/xiao-esp32c6-w471.yaml`](example/xiao-esp32c6-w471.yaml).
+This section describes the options the [packages](packages) are written with, for appliances that have no device package yet or for configurations written by hand.
 
 ### Hub
 
@@ -231,11 +292,11 @@ Some properties are meaningful only while a program runs. On the W 471, for exam
 
 ### Moving over from the home firmware
 
-The [example](example/xiao-esp32c6-w471.yaml) names its entities after the properties' names, as the home firmware does. To keep existing entity IDs, remove the old MQTT device in Home Assistant first, then add the ESPHome device with the same `friendly_name` the MQTT device had. The values are the same strings, so automations and dashboards keep working.
+The [device packages](packages) name their entities after the properties' names, as the home firmware does. To keep existing entity IDs, remove the old MQTT device in Home Assistant first, then add the ESPHome device with the same `friendly_name` the MQTT device had. The values are the same strings, so automations and dashboards keep working.
 
 ## Estimating energy use
 
-Older appliances do not measure their own consumption, but the properties they do report show what draws the power. On a washing machine the heater accounts for most of the energy of a heated program, so the time its relay is on, multiplied by its rating, gives a usable estimate. The `energy` block of the hub does this:
+Older appliances do not measure their own consumption, but the properties they do report show what draws the power. On a washing machine the heater accounts for most of the energy of a heated program, so the time its relay is on, multiplied by its rating, gives a usable estimate. The `energy` block of the hub does this (the [`energy.yaml`](packages/energy.yaml) package writes it for you from its variables):
 
 ```yaml
 freemdu:
