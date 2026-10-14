@@ -1,31 +1,23 @@
 # Seeed XIAO ESP32-C6 with an SFH 7250 on the optical interface of a Miele W 471 (software ID 457).
-# Wiring as in the FreeMDU home firmware: D0 (GPIO0) RX, D1 (GPIO1) TX.
-#
-# Entity names follow the property names of the home firmware, so a device that moves over from
-# it keeps its entity IDs once the old MQTT device has been removed from Home Assistant. Those
-# carry the device's codes (ProgramRunning) for automations and are marked diagnostic; the
-# names-only entities (Status, Program, Phase, …) show the same values in plain English.
+# Everything but your network comes from the packages, the energy estimate included: software
+# ID 457 estimates its own power. See README, "Installation with packages".
 
 esphome:
   name: washing-machine
   friendly_name: Washing Machine
 
-esp32:
-  board: seeed_xiao_esp32c6
-  variant: esp32c6
-  framework:
-    type: esp-idf
+packages:
+  freemdu:
+    url: https://github.com/bubenkoff/FreeMDU
+    ref: esphome
+    files:
+      - esphome/packages/xiao-esp32c6.yaml
+      - esphome/packages/id457.yaml
+      - esphome/packages/energy.yaml
 
-external_components:
-  - source:
-      type: git
-      url: https://github.com/bubenkoff/FreeMDU
-      ref: esphome
-      path: esphome/components
-    components: [freemdu]
-
-logger:
-  level: DEBUG
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
 api:
   encryption:
@@ -35,184 +27,3 @@ ota:
   # Uses the API encryption key; uploads must be encrypted
   - platform: esphome
     encryption: {}
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
-status_led:
-  pin:
-    number: GPIO15
-    inverted: true
-
-# The XIAO ESP32-C6 routes its antenna through an RF switch: GPIO3 low powers it,
-# GPIO14 low selects the onboard antenna. Without this the signal is about 40 dB weaker.
-switch:
-  - platform: gpio
-    pin: GPIO3
-    id: rf_switch_power
-    restore_mode: ALWAYS_OFF
-    internal: true
-  - platform: gpio
-    pin: GPIO14
-    id: rf_antenna_select
-    restore_mode: ALWAYS_OFF
-    internal: true
-
-uart:
-  id: mdu_uart
-  rx_pin:
-    number: GPIO0
-    inverted: true
-  tx_pin:
-    number: GPIO1
-    inverted: true
-  baud_rate: 2400
-  data_bits: 8
-  parity: EVEN
-  stop_bits: 1
-
-freemdu:
-  id: mdu
-  uart_id: mdu_uart
-  update_interval: 10s
-  # The W 471 has no energy meter; see README, "Estimating energy use"
-  energy:
-    # Replacement heating element for the W 471 S (Miele 11905530): 2.1 kW at 230 V
-    heater_power: 2100W
-    # Motor, drain pump and valves while a program runs: a rough figure, not a measurement
-    running_power: 150W
-    # Extra motor power during spins, scaled by the measured drum speed (400 W at 1600 rpm);
-    # also a rough figure
-    drum_power_per_1000_rpm: 250W
-    standby_power: 2W
-    power:
-      name: Estimated Power
-    energy:
-      name: Estimated Energy
-    program_energy:
-      name: Last Program Energy
-
-binary_sensor:
-  - platform: freemdu
-    connected: true
-    name: Connected
-  # On while locked. Not device_class: lock, which Home Assistant reads the other way round
-  - platform: freemdu
-    property: door_locked
-    name: Door Locked
-    icon: mdi:lock
-
-text_sensor:
-  - platform: freemdu
-    info: status
-    name: Adapter Status
-    entity_category: diagnostic
-  - platform: freemdu
-    info: software_id
-    name: Software ID
-    entity_category: diagnostic
-  - platform: freemdu
-    property: operating_state
-    name: Operating State
-    entity_category: diagnostic
-  - platform: freemdu
-    property: operating_state
-    format: text
-    name: Status
-  - platform: freemdu
-    property: selected_program
-    name: Selected Program
-    entity_category: diagnostic
-  - platform: freemdu
-    property: selected_program
-    format: text
-    name: Program
-  - platform: freemdu
-    property: program_type
-    name: Program Type
-  - platform: freemdu
-    property: program_options
-    name: Program Options
-    entity_category: diagnostic
-  - platform: freemdu
-    property: program_options
-    format: text
-    name: Options
-  - platform: freemdu
-    property: program_spin_setting
-    name: Program Spin Setting
-    entity_category: diagnostic
-  - platform: freemdu
-    property: program_spin_setting
-    format: text
-    name: Spin Setting
-  - platform: freemdu
-    property: program_phase
-    name: Program Phase
-    entity_category: diagnostic
-  - platform: freemdu
-    property: program_phase
-    format: text
-    name: Phase
-  - platform: freemdu
-    property: display_contents
-    name: Display Contents
-  - platform: freemdu
-    property: active_actuators
-    format: text
-    name: Active Actuators
-  - platform: freemdu
-    property: manufacturing_date
-    name: Manufacturing Date
-    entity_category: diagnostic
-
-sensor:
-  - platform: freemdu
-    property: program_temperature
-    name: Program Temperature
-    unit_of_measurement: "°C"
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: program_spin_speed
-    name: Program Spin Speed
-    unit_of_measurement: rpm
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: temperature
-    name: Temperature
-    device_class: temperature
-    unit_of_measurement: "°C"
-    state_class: measurement
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: water_level
-    name: Water Level
-    unit_of_measurement: mmH₂O
-    state_class: measurement
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: tachometer_speed
-    name: Drum Speed
-    unit_of_measurement: rpm
-    state_class: measurement
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: tachometer_speed
-    value: target
-    name: Drum Speed Target
-    unit_of_measurement: rpm
-    accuracy_decimals: 0
-  - platform: freemdu
-    property: operating_time
-    name: Operating Time
-    unit_of_measurement: h
-    device_class: duration
-    state_class: total_increasing
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    filters:
-      - multiply: 0.000277778
-  - platform: wifi_signal
-    name: WiFi Signal
-    update_interval: 60s
