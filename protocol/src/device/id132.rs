@@ -145,6 +145,18 @@ const PROP_TACHOMETER_SPEED: Property = Property {
     name: "Tachometer Speed",
     unit: Some("rpm"),
 };
+const PROP_SPINNING: Property = Property {
+    kind: PropertyKind::Io,
+    id: "spinning",
+    name: "Spinning",
+    unit: None,
+};
+const PROP_ESTIMATED_POWER: Property = Property {
+    kind: PropertyKind::Io,
+    id: "estimated_power",
+    name: "Estimated Power",
+    unit: Some("W"),
+};
 
 /// Washing machine fault code.
 ///
@@ -394,6 +406,23 @@ bitflags::bitflags! {
     }
 }
 
+/// Power draw of a W 925, measured part by part in its service mode by its owner.
+mod power {
+    /// The heater, Miele 4748124, rated 2.5 kW at 230 V; measured with an energy meter.
+    pub const HEATER: u32 = 2500;
+    /// While a program runs: the motor tumbling drew 75 W and the drain pump 100 W.
+    pub const RUNNING: u32 = 100;
+    /// Added per 1000 rpm of drum speed: spins drew 250 W at 400 rpm to 330 W at 1450 rpm with the
+    /// pump running, fitted to the top speed, where a final spin spends most of its time.
+    pub const DRUM_PER_1000_RPM: u32 = 150;
+    /// Switched on with no program running.
+    pub const STANDBY: u32 = 8;
+}
+
+/// Drum speed above which the drum counts as spinning, in rpm. Anti-crease turns the drum at
+/// 28 to 39 rpm every four minutes or so (target 30), and washing is slower than a spin.
+const SPINNING_RPM: u16 = 100;
+
 /// Washing machine device implementation.
 ///
 /// Connect to a compatible washing machine using [`WashingMachine::connect`].
@@ -596,6 +625,43 @@ impl<P: Read + Write> WashingMachine<P> {
             utils::rpm_from_motor_speed(target),
         ))
     }
+
+    /// Queries whether the drum is spinning: from the start of a spin until it has nearly run down.
+    ///
+    /// Unlike software ID 457, this firmware keeps counting the drum speed while the drum runs
+    /// down after a spin (880, 509, 211 rpm in one W 925 log), so the speed tells when the drum
+    /// is still. Not yet confirmed as the moment the door can be opened.
+    pub async fn query_spinning(&mut self) -> Result<bool, P::Error> {
+        let (current, _) = self.query_tachometer_speed().await?;
+
+        Ok(current > SPINNING_RPM)
+    }
+
+    /// Queries an estimate of the machine's power draw in `W` (watts), from what it is doing.
+    ///
+    /// The heater, a flat figure while a program runs or standby otherwise, and an amount that
+    /// grows with the drum speed (see the constants). This firmware reports no operating state,
+    /// so a program counts as running from a soak or pre-wash phase to the final spin.
+    pub async fn query_estimated_power(&mut self) -> Result<u32, P::Error> {
+        let running = !matches!(
+            self.query_program_phase().await?,
+            ProgramPhase::Idle | ProgramPhase::DelayedStart | ProgramPhase::AntiCreaseFinish
+        );
+        let heating = self
+            .query_active_actuators()
+            .await?
+            .contains(Actuator::Heater);
+        let (rpm, _) = self.query_tachometer_speed().await?;
+
+        let base = if running {
+            power::RUNNING
+        } else {
+            power::STANDBY
+        };
+        let heater = if heating { power::HEATER } else { 0 };
+
+        Ok(base + heater + power::DRUM_PER_1000_RPM * u32::from(rpm) / 1000)
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -657,6 +723,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_TARGET_TEMPERATURE,
             PROP_WATER_LEVEL,
             PROP_TACHOMETER_SPEED,
+            PROP_SPINNING,
+            PROP_ESTIMATED_POWER,
         ]
     }
 
@@ -694,6 +762,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_TARGET_TEMPERATURE => Ok(self.query_target_temperature().await?.into()),
             PROP_WATER_LEVEL => Ok(self.query_water_level().await?.into()),
             PROP_TACHOMETER_SPEED => Ok(self.query_tachometer_speed().await?.into()),
+            PROP_SPINNING => Ok(self.query_spinning().await?.into()),
+            PROP_ESTIMATED_POWER => Ok(self.query_estimated_power().await?.into()),
             _ => Err(Error::UnknownProperty),
         }
     }
