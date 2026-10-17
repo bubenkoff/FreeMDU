@@ -148,6 +148,12 @@ const PROP_SPINNING: Property = Property {
     name: "Spinning",
     unit: None,
 };
+const PROP_ESTIMATED_POWER: Property = Property {
+    kind: PropertyKind::Io,
+    id: "estimated_power",
+    name: "Estimated Power",
+    unit: Some("W"),
+};
 const PROP_TACHOMETER_SPEED: Property = Property {
     kind: PropertyKind::Io,
     id: "tachometer_speed",
@@ -460,6 +466,20 @@ bitflags::bitflags! {
     }
 }
 
+/// Power draw of a W 471, measured with the house's smart meter (P1, a reading every 10 seconds)
+/// over a Cottons 60 run while the rest of the house drew a steady 150 W or so.
+mod power {
+    /// The heater switching showed as steps of 2030 to 2110 W; the replacement element
+    /// (Miele 11905530) is rated 2.1 kW at 230 V.
+    pub const HEATER: u32 = 2050;
+    /// Above the base load while washing with the heater off and the drum slow: median 168 W.
+    pub const RUNNING: u32 = 170;
+    /// Added per 1000 rpm of drum speed in spins (a fit gave 174 W plus 234 W per 1000 rpm).
+    pub const DRUM_PER_1000_RPM: u32 = 230;
+    /// Switched on with no program running; from a W 925 of the same era.
+    pub const STANDBY: u32 = 8;
+}
+
 /// Washing machine device implementation.
 #[derive(Debug)]
 pub struct WashingMachine<P> {
@@ -672,6 +692,30 @@ impl<P: Read + Write> WashingMachine<P> {
         Ok(state != 0x00)
     }
 
+    /// Queries an estimate of the machine's power draw in `W` (watts), from what it is doing.
+    ///
+    /// The heater, a flat figure while a program runs (motor, pumps, valves, electronics) or
+    /// standby otherwise, and an amount that grows with the drum speed. Measured on one W 471
+    /// (see the constants); the whole Cottons 60 run came to 0.75 kWh this way against 0.73 to
+    /// 0.76 kWh on the meter. Integrating it over time gives the energy.
+    pub async fn query_estimated_power(&mut self) -> Result<u32, P::Error> {
+        let running = self.query_operating_state().await? == OperatingState::ProgramRunning;
+        let heating = self
+            .query_active_actuators()
+            .await?
+            .contains(Actuator::Heater);
+        let (rpm, _) = self.query_tachometer_speed().await?;
+
+        let base = if running {
+            power::RUNNING
+        } else {
+            power::STANDBY
+        };
+        let heater = if heating { power::HEATER } else { 0 };
+
+        Ok(base + heater + power::DRUM_PER_1000_RPM * u32::from(rpm) / 1000)
+    }
+
     /// Queries the drum speed measured by the tachometer generator and the target speed.
     ///
     /// Both are provided in `rpm` (revolutions per minute). The target is set during the final
@@ -747,6 +791,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_TEMPERATURE,
             PROP_WATER_LEVEL,
             PROP_TACHOMETER_SPEED,
+            PROP_ESTIMATED_POWER,
         ]
     }
 
@@ -782,6 +827,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_DOOR_LOCKED => Ok(self.query_door_locked().await?.into()),
             PROP_SPINNING => Ok(self.query_spinning().await?.into()),
             PROP_TACHOMETER_SPEED => Ok(self.query_tachometer_speed().await?.into()),
+            PROP_ESTIMATED_POWER => Ok(self.query_estimated_power().await?.into()),
             _ => Err(Error::UnknownProperty),
         }
     }
