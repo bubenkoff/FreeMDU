@@ -15,8 +15,8 @@
 //! the device's software ID and return an appropriate device instance.
 
 use crate::device::{
-    Action, Date, Device, DeviceKind, Error, Interface, Property, PropertyKind, Result, Value,
-    private, utils,
+    Action, Date, Device, DeviceKind, Error, Fault, Interface, Property, PropertyKind, Result,
+    Value, private, utils,
 };
 use alloc::{
     boxed::Box,
@@ -44,6 +44,12 @@ const PROP_OPERATING_TIME: Property = Property {
     kind: PropertyKind::General,
     id: "operating_time",
     name: "Operating Time",
+    unit: None,
+};
+const PROP_FAULT_F5: Property = Property {
+    kind: PropertyKind::Fault,
+    id: "fault_f5",
+    name: "F5: Detergent Overdose",
     unit: None,
 };
 const PROP_OPERATING_STATE: Property = Property {
@@ -93,6 +99,18 @@ const PROP_PROGRAM_PHASE: Property = Property {
     id: "program_phase",
     name: "Program Phase",
     unit: None,
+};
+const PROP_LOAD_LEVEL: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "load_level",
+    name: "Load Level",
+    unit: Some("kg"),
+};
+const PROP_PROGRAM_MAX_LOAD: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "program_max_load",
+    name: "Program Max Load",
+    unit: Some("g"),
 };
 const PROP_DISPLAY_CONTENTS: Property = Property {
     kind: PropertyKind::Operation,
@@ -247,6 +265,36 @@ pub enum Program {
     /// Delicates program, 40 °C.
     #[strum(message = "Delicates 40 °C")]
     Delicates40,
+}
+
+impl Program {
+    /// The most dry laundry the program takes, in grams, from the W 471 manual (M.-Nr. 05 645 660).
+    ///
+    /// The machine shows its weighing as a share of this, in quarters, before a program starts.
+    #[must_use]
+    pub fn max_load(self) -> Option<u32> {
+        match self {
+            Self::Finish => None,
+            Self::Cottons95
+            | Self::Cottons75
+            | Self::Cottons60
+            | Self::Cottons40
+            | Self::Cottons30
+            | Self::DrainSpin
+            | Self::SeparateRinse
+            | Self::Starch => Some(5000),
+            Self::MixedWash40 => Some(3000),
+            Self::MinimumIron60
+            | Self::MinimumIron50
+            | Self::MinimumIron40
+            | Self::MinimumIron30
+            | Self::QuickWash40 => Some(2500),
+            Self::WoolensCold | Self::Woolens30 | Self::Woolens40 => Some(2000),
+            Self::Silks30 | Self::DelicatesCold | Self::Delicates30 | Self::Delicates40 => {
+                Some(1000)
+            }
+        }
+    }
 }
 
 /// Washing program type.
@@ -539,6 +587,45 @@ impl<P: Read + Write> WashingMachine<P> {
         Ok(Actuator::from_bits_truncate(actuators))
     }
 
+    /// Queries the laundry load level, the machine's own estimate of the dry load.
+    ///
+    /// At the same address as on software ID 469. The machine weighs the dry laundry when the door
+    /// is closed after loading and keeps the result for the whole program, so it can be read at
+    /// any time. It reads 5 before anything is weighed, while the door is open: the most the
+    /// machine takes. About ten minutes into the main wash the machine may revise it from how
+    /// much water the laundry took up, and extend the remaining time to match: a Cottons 40 load
+    /// went from 1 to 3 and its time from 41 minutes to 1:08.
+    ///
+    /// The value appears to be whole kilograms, rounded down. Every loading on a W 471 fits
+    /// that against what its display showed (the load as a quarter of the program's maximum, see
+    /// [`Program::max_load`]): 3 and 4 for two loads both shown as 75 % of 5 kg, 1 for one shown
+    /// as 25 % and for two below 25 %. Not yet confirmed with weighed laundry.
+    pub async fn query_load_level(&mut self) -> Result<u8, P::Error> {
+        Ok(self.intf.read_memory(0x004a).await?)
+    }
+
+    /// Queries the most dry laundry the selected program takes, in grams (see
+    /// [`Program::max_load`]); 0 at the _Finish_ position.
+    pub async fn query_program_max_load(&mut self) -> Result<u32, P::Error> {
+        Ok(self.query_selected_program().await?.max_load().unwrap_or(0))
+    }
+
+    /// Queries the detergent overdose fault (F5), lit on the panel as too much foam.
+    ///
+    /// The status bit is the one software ID 469 uses. It was seen set from the start of the
+    /// second rinse until the door was opened, in both Cottons runs of a day on which the panel
+    /// showed the warning. Only the active state is reported: where this firmware stores past
+    /// faults is not known (0x004e, which holds them on 469, read `0xf8` throughout).
+    pub async fn query_detergent_overdose(&mut self) -> Result<Fault, P::Error> {
+        let state: u8 = self.intf.read_memory(0x0044).await?;
+
+        Ok(if (state & 0x08) != 0x00 {
+            Fault::Active(None)
+        } else {
+            Fault::Ok
+        })
+    }
+
     /// Queries the current temperature sensed by the NTC thermistor and the target temperature.
     ///
     /// The temperature is provided in `°C` (degrees Celsius).
@@ -642,6 +729,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
         &[
             PROP_MANUFACTURING_DATE,
             PROP_OPERATING_TIME,
+            PROP_FAULT_F5,
             PROP_OPERATING_STATE,
             PROP_SELECTED_PROGRAM,
             PROP_PROGRAM_TYPE,
@@ -650,6 +738,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_SPIN_SETTING,
             PROP_PROGRAM_SPIN_SPEED,
             PROP_PROGRAM_PHASE,
+            PROP_LOAD_LEVEL,
+            PROP_PROGRAM_MAX_LOAD,
             PROP_DISPLAY_CONTENTS,
             PROP_ACTIVE_ACTUATORS,
             PROP_DOOR_LOCKED,
@@ -669,6 +759,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             // General
             PROP_MANUFACTURING_DATE => Ok(self.query_manufacturing_date().await?.into()),
             PROP_OPERATING_TIME => Ok(self.query_operating_time().await?.into()),
+            // Faults
+            PROP_FAULT_F5 => Ok(self.query_detergent_overdose().await?.into()),
             // Operation
             PROP_OPERATING_STATE => Ok(self.query_operating_state().await?.to_string().into()),
             PROP_SELECTED_PROGRAM => Ok(self.query_selected_program().await?.to_string().into()),
@@ -680,6 +772,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             }
             PROP_PROGRAM_SPIN_SPEED => Ok(self.query_program_spin_speed().await?.into()),
             PROP_PROGRAM_PHASE => Ok(self.query_program_phase().await?.to_string().into()),
+            PROP_LOAD_LEVEL => Ok(self.query_load_level().await?.into()),
+            PROP_PROGRAM_MAX_LOAD => Ok(self.query_program_max_load().await?.into()),
             PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
@@ -738,6 +832,23 @@ mod tests {
             dev.value_name(&PROP_TEMPERATURE, &Value::Sensor(19, 0)),
             None
         );
+    }
+
+    #[test]
+    fn max_load() {
+        assert_eq!(Program::Finish.max_load(), None);
+        assert_eq!(Program::Cottons40.max_load(), Some(5000));
+        assert_eq!(Program::QuickWash40.max_load(), Some(2500));
+        assert_eq!(Program::Woolens30.max_load(), Some(2000));
+
+        for repr in 1..=u8::MAX {
+            if let Some(program) = Program::from_repr(repr) {
+                assert!(
+                    program.max_load().is_some(),
+                    "{program} has no maximum load"
+                );
+            }
+        }
     }
 
     #[test]
