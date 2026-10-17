@@ -118,6 +118,12 @@ const PROP_DISPLAY_CONTENTS: Property = Property {
     name: "Display Contents",
     unit: None,
 };
+const PROP_DISPLAY_INDICATOR: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "display_indicator",
+    name: "Display Indicator",
+    unit: None,
+};
 const PROP_ACTIVE_ACTUATORS: Property = Property {
     kind: PropertyKind::Io,
     id: "active_actuators",
@@ -160,6 +166,51 @@ const PROP_TACHOMETER_SPEED: Property = Property {
     name: "Tachometer Speed",
     unit: Some("rpm"),
 };
+
+/// What the display shows, as told by the indicator lamps beside it.
+///
+/// The machine weighs the dry laundry and shows the result before a program starts: the load as a
+/// share of the program's maximum (_Belading %_: 25, 50, 75 or 100, nothing below 25) while the
+/// door is open, then the detergent dose as a share of a full-load dose (_Wasmiddel %_: 40, 50,
+/// 60, 75 or 100) once it is closed. The button above _Start_ cycles through them and the
+/// remaining time.
+#[derive(Display, EnumString, EnumMessage, PartialEq, Eq, Copy, Clone, Debug)]
+pub enum DisplayIndicator {
+    /// The display is switched off or blank.
+    #[strum(message = "Off")]
+    Off,
+    /// The display shows the load in percent of the program's maximum, or nothing below 25 %.
+    #[strum(message = "Load %")]
+    Load,
+    /// The display shows the detergent dose in percent of a full-load dose.
+    #[strum(message = "Detergent %")]
+    Detergent,
+    /// The display shows the remaining program time.
+    #[strum(message = "Remaining time")]
+    RemainingTime,
+}
+
+impl DisplayIndicator {
+    /// Decodes the indicator from the four MC14489 display bytes.
+    ///
+    /// The lamps for load and remaining time are driven as the fourth digit bank (1 and 2); the
+    /// detergent lamp is not, so a number shown with that bank dark is the detergent dose.
+    fn from_display(display: [u8; 4]) -> Self {
+        let enabled = (display[3] & 0x01) != 0x00;
+        let digits_blank = utils::decode_mc14489_display(display)
+            .iter()
+            .flatten()
+            .all(|c| *c == '.');
+
+        match display[1] >> 4 {
+            _ if !enabled => Self::Off,
+            0x01 => Self::Load,
+            0x02 => Self::RemainingTime,
+            _ if digits_blank => Self::Off,
+            _ => Self::Detergent,
+        }
+    }
+}
 
 /// Washing machine operating state.
 ///
@@ -598,6 +649,17 @@ impl<P: Read + Write> WashingMachine<P> {
             .collect())
     }
 
+    /// Queries which reading the display shows (see [`DisplayIndicator`]).
+    ///
+    /// Together with [`Self::query_display_contents`] this gives the load and detergent dose the
+    /// machine has measured; they are on the display only, so a caller that wants to keep them
+    /// has to remember them while their lamp is lit.
+    pub async fn query_display_indicator(&mut self) -> Result<DisplayIndicator, P::Error> {
+        let display: [u8; 4] = self.intf.read_memory(0x009e).await?;
+
+        Ok(DisplayIndicator::from_display(display))
+    }
+
     /// Queries the currently active actuators.
     pub async fn query_active_actuators(&mut self) -> Result<Actuator, P::Error> {
         let actuators: u16 = self.intf.read_memory(0x007d).await?;
@@ -757,6 +819,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_TYPE => ProgramType::from_str(code).ok()?.get_message(),
             PROP_PROGRAM_SPIN_SETTING => SpinSetting::from_str(code).ok()?.get_message(),
             PROP_PROGRAM_PHASE => ProgramPhase::from_str(code).ok()?.get_message(),
+            PROP_DISPLAY_INDICATOR => DisplayIndicator::from_str(code).ok()?.get_message(),
             _ => None,
         }
     }
@@ -785,6 +848,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_LOAD_LEVEL,
             PROP_PROGRAM_MAX_LOAD,
             PROP_DISPLAY_CONTENTS,
+            PROP_DISPLAY_INDICATOR,
             PROP_ACTIVE_ACTUATORS,
             PROP_DOOR_LOCKED,
             PROP_SPINNING,
@@ -820,6 +884,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_LOAD_LEVEL => Ok(self.query_load_level().await?.into()),
             PROP_PROGRAM_MAX_LOAD => Ok(self.query_program_max_load().await?.into()),
             PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
+            PROP_DISPLAY_INDICATOR => Ok(self.query_display_indicator().await?.to_string().into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
             PROP_TEMPERATURE => Ok(self.query_temperature().await?.into()),
@@ -873,6 +938,10 @@ mod tests {
             name(&PROP_PROGRAM_PHASE, "AntiCreaseFinish"),
             Some("Anti-crease/finish")
         );
+        assert_eq!(
+            name(&PROP_DISPLAY_INDICATOR, "Detergent"),
+            Some("Detergent %")
+        );
         assert_eq!(name(&PROP_PROGRAM_PHASE, "NoSuchPhase"), None);
         assert_eq!(
             dev.value_name(&PROP_TEMPERATURE, &Value::Sensor(19, 0)),
@@ -894,6 +963,29 @@ mod tests {
                     "{program} has no maximum load"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn display_indicator() {
+        // Display bytes from a W 471, 2026-10-17
+        let cases = [
+            ([0x70, 0x15, 0x80, 0x73], DisplayIndicator::Load), // "75", door open
+            ([0x00, 0x10, 0x91, 0x7f], DisplayIndicator::Load), // blank, below 25 %
+            ([0x70, 0x05, 0x80, 0x73], DisplayIndicator::Detergent), // "75", door closed
+            ([0x40, 0x00, 0x80, 0x73], DisplayIndicator::Detergent), // "40"
+            ([0x11, 0x28, 0x90, 0x71], DisplayIndicator::RemainingTime), // "1.18"
+            ([0x00, 0x20, 0x80, 0x77], DisplayIndicator::RemainingTime), // "0", finished
+            ([0x00, 0x00, 0x80, 0x7e], DisplayIndicator::Off),  // switched off
+            ([0x00, 0x00, 0x90, 0x7f], DisplayIndicator::Off),  // blank
+        ];
+
+        for (display, indicator) in cases {
+            assert_eq!(
+                DisplayIndicator::from_display(display),
+                indicator,
+                "{display:02x?}"
+            );
         }
     }
 
