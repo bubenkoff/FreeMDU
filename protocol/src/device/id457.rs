@@ -15,8 +15,8 @@
 //! the device's software ID and return an appropriate device instance.
 
 use crate::device::{
-    Action, Date, Device, DeviceKind, Error, Interface, Property, PropertyKind, Result, Value,
-    private, utils,
+    Action, Date, Device, DeviceKind, Error, Fault, Interface, Property, PropertyKind, Result,
+    Value, private, utils,
 };
 use alloc::{
     boxed::Box,
@@ -44,6 +44,12 @@ const PROP_OPERATING_TIME: Property = Property {
     kind: PropertyKind::General,
     id: "operating_time",
     name: "Operating Time",
+    unit: None,
+};
+const PROP_FAULT_F5: Property = Property {
+    kind: PropertyKind::Fault,
+    id: "fault_f5",
+    name: "F5: Detergent Overdose",
     unit: None,
 };
 const PROP_OPERATING_STATE: Property = Property {
@@ -92,6 +98,12 @@ const PROP_PROGRAM_PHASE: Property = Property {
     kind: PropertyKind::Operation,
     id: "program_phase",
     name: "Program Phase",
+    unit: None,
+};
+const PROP_LOAD_LEVEL: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "load_level",
+    name: "Load Level",
     unit: None,
 };
 const PROP_DISPLAY_CONTENTS: Property = Property {
@@ -539,6 +551,34 @@ impl<P: Read + Write> WashingMachine<P> {
         Ok(Actuator::from_bits_truncate(actuators))
     }
 
+    /// Queries the laundry load level.
+    ///
+    /// The load level ranges from 1 to 5 and is calculated by the machine during operation, at
+    /// the same address as on software ID 469. A program starts with a preset level (seen: 1 for
+    /// Woolens, 2 for Miniwas and Cottons 60) and about ten minutes into the main wash the
+    /// machine replaces it with its own estimate, extending the remaining time to match: a full
+    /// Cottons 40 load went from 1 to 3 and its time from 41 minutes to 1:08. Outside a program
+    /// the value is not meaningful.
+    pub async fn query_load_level(&mut self) -> Result<u8, P::Error> {
+        Ok(self.intf.read_memory(0x004a).await?)
+    }
+
+    /// Queries the detergent overdose fault (F5), lit on the panel as too much foam.
+    ///
+    /// The status bit is the one software ID 469 uses. It was seen set from the start of the
+    /// second rinse until the door was opened, in both Cottons runs of a day on which the panel
+    /// showed the warning. Only the active state is reported: where this firmware stores past
+    /// faults is not known (0x004e, which holds them on 469, read `0xf8` throughout).
+    pub async fn query_detergent_overdose(&mut self) -> Result<Fault, P::Error> {
+        let state: u8 = self.intf.read_memory(0x0044).await?;
+
+        Ok(if (state & 0x08) != 0x00 {
+            Fault::Active(None)
+        } else {
+            Fault::Ok
+        })
+    }
+
     /// Queries the current temperature sensed by the NTC thermistor and the target temperature.
     ///
     /// The temperature is provided in `°C` (degrees Celsius).
@@ -642,6 +682,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
         &[
             PROP_MANUFACTURING_DATE,
             PROP_OPERATING_TIME,
+            PROP_FAULT_F5,
             PROP_OPERATING_STATE,
             PROP_SELECTED_PROGRAM,
             PROP_PROGRAM_TYPE,
@@ -650,6 +691,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_SPIN_SETTING,
             PROP_PROGRAM_SPIN_SPEED,
             PROP_PROGRAM_PHASE,
+            PROP_LOAD_LEVEL,
             PROP_DISPLAY_CONTENTS,
             PROP_ACTIVE_ACTUATORS,
             PROP_DOOR_LOCKED,
@@ -669,6 +711,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             // General
             PROP_MANUFACTURING_DATE => Ok(self.query_manufacturing_date().await?.into()),
             PROP_OPERATING_TIME => Ok(self.query_operating_time().await?.into()),
+            // Faults
+            PROP_FAULT_F5 => Ok(self.query_detergent_overdose().await?.into()),
             // Operation
             PROP_OPERATING_STATE => Ok(self.query_operating_state().await?.to_string().into()),
             PROP_SELECTED_PROGRAM => Ok(self.query_selected_program().await?.to_string().into()),
@@ -680,6 +724,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             }
             PROP_PROGRAM_SPIN_SPEED => Ok(self.query_program_spin_speed().await?.into()),
             PROP_PROGRAM_PHASE => Ok(self.query_program_phase().await?.to_string().into()),
+            PROP_LOAD_LEVEL => Ok(self.query_load_level().await?.into()),
             PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
