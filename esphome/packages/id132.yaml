@@ -15,6 +15,19 @@ binary_sensor:
     id: mdu_spinning
     name: Spinning
     device_class: moving
+  # On while the door button would be refused: water in the drum, or the drum still spinning, as
+  # the W 925's owner describes it. Worked out from Water Level and Spinning, because no such flag
+  # has been found in the machine's memory. Neither threshold is confirmed yet: any water the level
+  # switch reports, and Spinning's 100 rpm (in one log the door opened somewhere between 211 rpm and
+  # still). Not device_class: lock, which Home Assistant reads the other way round
+  - platform: template
+    id: mdu_door_interlock
+    name: Door Interlock
+    icon: mdi:lock
+    lambda: |-
+      if (std::isnan(id(mdu_water_level).state))
+        return {};
+      return id(mdu_spinning).state || id(mdu_water_level).state > 0;
 
 text_sensor:
   - platform: freemdu
