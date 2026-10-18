@@ -50,6 +50,11 @@ text_sensor:
     format: text
     id: mdu_phase
     name: Phase
+  # As the machine shows it: "2 13", "27" or "0", with no colon and leading zeros dark
+  - platform: freemdu
+    property: display_contents
+    id: mdu_display_contents
+    name: Display Contents
   - platform: freemdu
     property: active_actuators
     format: text
@@ -110,6 +115,17 @@ sensor:
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 0
+  # The time on the display: to the start during a delayed start, then to the end of the program.
+  # The machine revises it early in a program (one Cottons 60 went from 1:51 to 1:01)
+  - platform: freemdu
+    property: remaining_time
+    id: mdu_remaining_time
+    name: Remaining Time
+    unit_of_measurement: min
+    device_class: duration
+    accuracy_decimals: 0
+    filters:
+      - multiply: 0.0166667
   - platform: freemdu
     property: water_level
     id: mdu_water_level
