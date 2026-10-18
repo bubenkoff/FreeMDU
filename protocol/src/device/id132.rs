@@ -12,7 +12,11 @@ use crate::device::{
     Action, Device, DeviceKind, Error, Fault, Interface, Property, PropertyKind, Result, Value,
     private, utils,
 };
-use alloc::{boxed::Box, string::ToString};
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+};
 use bitflags_derive::{FlagsDebug, FlagsDisplay};
 use core::{str, str::FromStr, time::Duration};
 use embedded_io_async::{Read, Write};
@@ -113,6 +117,18 @@ const PROP_PROGRAM_PHASE: Property = Property {
     kind: PropertyKind::Operation,
     id: "program_phase",
     name: "Program Phase",
+    unit: None,
+};
+const PROP_DISPLAY_CONTENTS: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "display_contents",
+    name: "Display Contents",
+    unit: None,
+};
+const PROP_REMAINING_TIME: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "remaining_time",
+    name: "Remaining Time",
     unit: None,
 };
 const PROP_ACTIVE_ACTUATORS: Property = Property {
@@ -423,6 +439,28 @@ mod power {
 /// 28 to 39 rpm every four minutes or so (target 30), and washing is slower than a spin.
 const SPINNING_RPM: u16 = 100;
 
+/// Segment patterns of the digits 0 to 9 on the display, as this firmware keeps them in RAM.
+const DISPLAY_SEGMENTS: [u8; 10] = [0x7e, 0x28, 0x5b, 0x3b, 0x2d, 0x37, 0x77, 0x2a, 0x7f, 0x3f];
+
+/// Decodes the three display digits (hours, tens of minutes, minutes) from their RAM bytes.
+///
+/// A digit holds its segment pattern, or for a moment its plain value 0 to 9 while the firmware
+/// rewrites it; no pattern is below 10, so both read alike. A blank digit is 0x00, the same as a
+/// plain 0, which is how a blank leading digit counts anyway. Returns `None` for any other byte.
+fn decode_display(display: [u8; 3]) -> Option<[u8; 3]> {
+    let mut digits = [0; 3];
+
+    for (digit, byte) in digits.iter_mut().zip(display) {
+        *digit = if byte <= 9 {
+            byte
+        } else {
+            (0..).zip(DISPLAY_SEGMENTS).find(|&(_, seg)| seg == byte)?.0
+        };
+    }
+
+    Some(digits)
+}
+
 /// Washing machine device implementation.
 ///
 /// Connect to a compatible washing machine using [`WashingMachine::connect`].
@@ -558,6 +596,36 @@ impl<P: Read + Write> WashingMachine<P> {
         // This value is used to set the front panel indicator lights at 0x0038 and 0x0039.
         ProgramPhase::from_repr(self.intf.read_memory(0x001c).await?)
             .ok_or(Error::UnexpectedMemoryValue)
+    }
+
+    /// Queries the time on the display as hours, tens of minutes and minutes.
+    async fn query_display(&mut self) -> Result<[u8; 3], P::Error> {
+        // The display digits are kept at 0x001e to 0x0020 (see `decode_display`).
+        decode_display(self.intf.read_memory(0x001e).await?).ok_or(Error::UnexpectedMemoryValue)
+    }
+
+    /// Queries the contents of the display, as it shows them: `2 13`, `27` or `0`.
+    ///
+    /// The display shows the time left: until the start during a delayed start, then until the
+    /// end of the program. Leading zeros stay dark, and there is no colon between the hour and the
+    /// minutes. The firmware revises the time early in a program: a Cottons 60 on a W 925 started
+    /// at 1:51 and showed 1:01 two minutes later, which then held to the end.
+    pub async fn query_display_contents(&mut self) -> Result<String, P::Error> {
+        let [hours, tens, mins] = self.query_display().await?;
+
+        Ok(match (hours, tens) {
+            (0, 0) => format!("{mins}"),
+            (0, _) => format!("{tens}{mins}"),
+            _ => format!("{hours} {tens}{mins}"),
+        })
+    }
+
+    /// Queries the time left as shown on the display (see [`Self::query_display_contents`]).
+    pub async fn query_remaining_time(&mut self) -> Result<Duration, P::Error> {
+        let [hours, tens, mins] = self.query_display().await?;
+        let total_mins = u64::from(hours) * 60 + u64::from(tens) * 10 + u64::from(mins);
+
+        Ok(Duration::from_secs(total_mins * 60))
     }
 
     /// Queries the currently active actuators.
@@ -718,6 +786,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_SPIN_SETTING,
             PROP_PROGRAM_SPIN_SPEED,
             PROP_PROGRAM_PHASE,
+            PROP_DISPLAY_CONTENTS,
+            PROP_REMAINING_TIME,
             PROP_ACTIVE_ACTUATORS,
             PROP_NTC_RESISTANCE,
             PROP_TARGET_TEMPERATURE,
@@ -756,6 +826,8 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
                 Ok(self.query_program_spin_speed().await?.to_string().into())
             }
             PROP_PROGRAM_PHASE => Ok(self.query_program_phase().await?.to_string().into()),
+            PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
+            PROP_REMAINING_TIME => Ok(self.query_remaining_time().await?.into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
             PROP_NTC_RESISTANCE => Ok(self.query_ntc_resistance().await?.into()),
@@ -791,6 +863,16 @@ mod tests {
         assert_eq!(SpinSetting::from_raw(9, 27), Some(SpinSetting::RinseHold));
         assert_eq!(SpinSetting::from_raw(8, 27), Some(SpinSetting::NoFinalSpin));
         assert_eq!(SpinSetting::from_raw(0, 15), None);
+    }
+
+    #[test]
+    fn decodes_display() {
+        // 1:51, 27 with the tens caught as a plain value, 9, and blank
+        assert_eq!(decode_display([0x28, 0x37, 0x28]), Some([1, 5, 1]));
+        assert_eq!(decode_display([0x00, 0x02, 0x2a]), Some([0, 2, 7]));
+        assert_eq!(decode_display([0x00, 0x00, 0x3f]), Some([0, 0, 9]));
+        assert_eq!(decode_display([0x00, 0x00, 0x00]), Some([0, 0, 0]));
+        assert_eq!(decode_display([0x10, 0x00, 0x7e]), None);
     }
 
     #[test]
