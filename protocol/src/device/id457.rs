@@ -124,6 +124,12 @@ const PROP_DISPLAY_INDICATOR: Property = Property {
     name: "Display Indicator",
     unit: None,
 };
+const PROP_REMAINING_TIME: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "remaining_time",
+    name: "Remaining Time",
+    unit: None,
+};
 const PROP_ACTIVE_ACTUATORS: Property = Property {
     kind: PropertyKind::Io,
     id: "active_actuators",
@@ -210,6 +216,31 @@ impl DisplayIndicator {
             _ => Self::Detergent,
         }
     }
+}
+
+/// Decodes the time to the end of the program from the four MC14489 display bytes.
+///
+/// Only while the remaining-time lamp is lit (see [`DisplayIndicator`]): the same digits show the
+/// load or the detergent dose otherwise. The machine shows minutes (`31`) or, from an hour on,
+/// hours and minutes (`1.18`). The lamp's enable bit is not checked, because it drops for a moment
+/// while the time is still shown.
+fn remaining_time_from_display(display: [u8; 4]) -> Option<Duration> {
+    if display[1] >> 4 != 0x02 {
+        return None;
+    }
+
+    let text: String = utils::decode_mc14489_display(display)
+        .iter()
+        .flatten()
+        .collect();
+    let (hours, mins) = match text.trim().split_once('.') {
+        Some((hours, mins)) if mins.len() == 2 => (hours.trim().parse::<u64>().ok()?, mins),
+        Some(_) => return None,
+        None => (0, text.trim()),
+    };
+    let mins = mins.parse::<u64>().ok()?;
+
+    Some(Duration::from_secs((hours * 60 + mins) * 60))
 }
 
 /// Washing machine operating state.
@@ -660,6 +691,21 @@ impl<P: Read + Write> WashingMachine<P> {
         Ok(DisplayIndicator::from_display(display))
     }
 
+    /// Queries the time left until the end of the program, as shown on the display.
+    ///
+    /// Fails with [`Error::InvalidState`] while the display shows something else, such as the
+    /// load or detergent dose before a start, or nothing, and during a delayed start, when the
+    /// display may count down to the start instead.
+    pub async fn query_remaining_time(&mut self) -> Result<Duration, P::Error> {
+        if self.query_program_phase().await? == ProgramPhase::DelayedStart {
+            return Err(Error::InvalidState);
+        }
+
+        let display: [u8; 4] = self.intf.read_memory(0x009e).await?;
+
+        remaining_time_from_display(display).ok_or(Error::InvalidState)
+    }
+
     /// Queries the currently active actuators.
     pub async fn query_active_actuators(&mut self) -> Result<Actuator, P::Error> {
         let actuators: u16 = self.intf.read_memory(0x007d).await?;
@@ -849,6 +895,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_MAX_LOAD,
             PROP_DISPLAY_CONTENTS,
             PROP_DISPLAY_INDICATOR,
+            PROP_REMAINING_TIME,
             PROP_ACTIVE_ACTUATORS,
             PROP_DOOR_LOCKED,
             PROP_SPINNING,
@@ -885,6 +932,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_MAX_LOAD => Ok(self.query_program_max_load().await?.into()),
             PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
             PROP_DISPLAY_INDICATOR => Ok(self.query_display_indicator().await?.to_string().into()),
+            PROP_REMAINING_TIME => Ok(self.query_remaining_time().await?.into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
             PROP_TEMPERATURE => Ok(self.query_temperature().await?.into()),
@@ -986,6 +1034,28 @@ mod tests {
                 indicator,
                 "{display:02x?}"
             );
+        }
+    }
+
+    #[test]
+    fn remaining_time() {
+        // Display bytes from a W 471's memory log, 2026-10-13 to 2026-10-20
+        let mins = |m: u64| Some(Duration::from_secs(m * 60));
+        let cases = [
+            ([0x30, 0x21, 0x81, 0x73], mins(31)), // "31"
+            ([0x01, 0x25, 0x90, 0x71], mins(65)), // "1.05"
+            ([0x11, 0x28, 0x90, 0x71], mins(78)), // "1.18"
+            ([0x30, 0x29, 0x80, 0x72], mins(39)), // "39", enable bit down for a moment
+            ([0x00, 0x20, 0x80, 0x77], mins(0)),  // "0", finished
+            ([0x00, 0x20, 0x80, 0x71], mins(0)),  // "000"
+            ([0x40, 0x00, 0x80, 0x73], None),     // "40", the detergent dose before a start
+            ([0x70, 0x15, 0x80, 0x73], None),     // "75", the load
+            ([0x00, 0x20, 0x80, 0x7e], None),     // switched off
+            ([0x00, 0x00, 0x90, 0x7f], None),     // blank
+        ];
+
+        for (display, time) in cases {
+            assert_eq!(remaining_time_from_display(display), time, "{display:02x?}");
         }
     }
 
