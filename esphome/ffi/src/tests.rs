@@ -20,6 +20,7 @@ enum State {
 }
 
 struct Machine {
+    ram: [u8; 1024],
     state: State,
     output: VecDeque<u8>,
     echo: bool,
@@ -30,6 +31,7 @@ struct Machine {
 impl Machine {
     fn new(echo: bool) -> Self {
         Self {
+            ram: *RAM,
             state: State::Request(Vec::new()),
             output: VecDeque::new(),
             echo,
@@ -76,7 +78,7 @@ impl Machine {
                 self.unlocked = param == usize::from(READ_KEY);
                 Vec::new()
             }
-            0x30 if self.unlocked => RAM[param..param + len].to_vec(),
+            0x30 if self.unlocked => self.ram[param..param + len].to_vec(),
             0x31 if self.unlocked => EEPROM[param * 2..param * 2 + len].to_vec(),
             _ => {
                 self.output.push_back(0x02);
@@ -235,6 +237,12 @@ fn reads_id457_through_the_optical_echo() {
     let display = query(dev, "display_contents");
     assert_eq!(text(&display), "51");
 
+    let remaining = query(dev, "remaining_time");
+    assert_eq!(
+        (remaining.kind, remaining.number, text(&remaining)),
+        (FMDU_VALUE_DURATION, 51 * 60, "0h 51min")
+    );
+
     let indicator = query(dev, "display_indicator");
     assert_eq!(
         (text(&indicator), name(&indicator)),
@@ -306,7 +314,7 @@ fn lists_properties_with_units() {
     assert_eq!(status, FMDU_OK);
 
     let count = unsafe { fmdu_property_count(dev) };
-    assert_eq!(count, 22);
+    assert_eq!(count, 23);
 
     let idx = unsafe { fmdu_property_find(dev, c"program_spin_speed".as_ptr(), 18) };
     let mut prop = fmdu_property_t {
@@ -354,12 +362,40 @@ fn reports_a_missing_echo() {
 }
 
 #[test]
+fn reports_a_value_the_state_does_not_have_as_unavailable() {
+    let mut machine = Machine::new(true);
+    // The display shows the detergent dose, "40", as before a start
+    machine.ram[0x009e..0x00a2].copy_from_slice(&[0x40, 0x00, 0x80, 0x73]);
+    let (status, dev, _) = connect(&mut machine, true);
+    assert_eq!(status, FMDU_OK);
+
+    let idx = unsafe { fmdu_property_find(dev, c"remaining_time".as_ptr(), 14) };
+    assert!(idx >= 0);
+    let mut val = fmdu_value_t {
+        kind: 0xff,
+        number: 0,
+        target: 0,
+        count: 0,
+        text: [0; FMDU_TEXT_MAX],
+        name: [0; FMDU_TEXT_MAX],
+    };
+    let status = unsafe { fmdu_query_property(dev, idx as usize, &mut val) };
+    assert_eq!(status, FMDU_ERR_UNAVAILABLE);
+
+    // The device still answers the next query
+    assert_eq!(text(&query(dev, "display_contents")), "40");
+
+    unsafe { fmdu_free(dev) };
+}
+
+#[test]
 fn status_strings_are_terminated() {
     for status in [
         FMDU_OK,
         FMDU_ERR_TIMEOUT,
         FMDU_ERR_UNKNOWN_DEVICE,
         FMDU_ERR_NO_ECHO,
+        FMDU_ERR_UNAVAILABLE,
         -99,
     ] {
         let msg = unsafe { CStr::from_ptr(fmdu_status_str(status)) };

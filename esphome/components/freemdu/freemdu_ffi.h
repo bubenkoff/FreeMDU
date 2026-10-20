@@ -20,6 +20,7 @@ extern "C" {
 #define FMDU_ERR_DEVICE -6
 #define FMDU_ERR_OTHER -7
 #define FMDU_ERR_NO_ECHO -8
+#define FMDU_ERR_UNAVAILABLE -9
 
 #define FMDU_TEXT_MAX 64
 // Request size of fmdu_read_memory(); its length must be a multiple of this.
@@ -100,6 +101,7 @@ size_t fmdu_property_count(const fmdu_device_t *dev);
 bool fmdu_property_get(const fmdu_device_t *dev, size_t idx, fmdu_property_t *out);
 // Returns -1 if there is no property with that ID.
 int32_t fmdu_property_find(const fmdu_device_t *dev, const char *id, size_t len);
+// FMDU_ERR_UNAVAILABLE: the property has no value in the current state; nothing is logged.
 int32_t fmdu_query_property(fmdu_device_t *dev, size_t idx, fmdu_value_t *out);
 
 // Reads len bytes of device memory from addr, with the access the device implementation unlocked.

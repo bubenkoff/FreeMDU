@@ -228,7 +228,7 @@ Options of the three platforms, on top of the usual ESPHome entity options (`nam
 | `connected` | binary sensor | | `true`: on while the device answers, instead of a property. |
 | `freemdu_id` | all | | The hub, needed only with more than one `freemdu:` block. |
 
-If the connected device has no property with the configured ID, this is logged once and the entity stays unknown. Several entities may use the same property; it is queried once per poll.
+If the connected device has no property with the configured ID, this is logged once and the entity stays unknown. A property can also have no value in the appliance's current state, such as a remaining time while the display shows something else: the entity is then unknown until it has one again, and nothing is logged. Several entities may use the same property; it is queried once per poll.
 
 ### Adapter information
 
