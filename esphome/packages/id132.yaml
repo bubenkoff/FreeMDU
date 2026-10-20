@@ -9,7 +9,8 @@ packages:
 binary_sensor:
   # On while the measured drum speed is above 100 rpm, from the start of a spin until the drum has
   # nearly run down; anti-crease tumbling stays below. Off with Phase Anti-crease/finish means the
-  # drum has stopped. Not yet confirmed as the moment the door can be opened
+  # drum has stopped. In two logs the door opened after a last reading of 211 and 241 rpm, before
+  # the drum had stopped, which fits but does not pin down the moment the door is released
   - platform: freemdu
     property: spinning
     id: mdu_spinning
@@ -17,9 +18,11 @@ binary_sensor:
     device_class: moving
   # On while the door button would be refused: water in the drum, or the drum still spinning, as
   # the W 925's owner describes it. Worked out from Water Level and Spinning, because no such flag
-  # has been found in the machine's memory. Neither threshold is confirmed yet: any water the level
-  # switch reports, and Spinning's 100 rpm (in one log the door opened somewhere between 211 rpm and
-  # still). Not device_class: lock, which Home Assistant reads the other way round
+  # has been found in the machine's memory. Any water the level switch reports holds the door:
+  # draining from level 3 with the button held, it stayed shut for at least 20 s at level 1. The
+  # drum threshold is Spinning's 100 rpm, see above. Like every value it is as old as the last
+  # poll, so the door can open while it still reads on from a reading taken just before. Not
+  # device_class: lock, which Home Assistant reads the other way round
   - platform: template
     id: mdu_door_interlock
     name: Door Interlock
