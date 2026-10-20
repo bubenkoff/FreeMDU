@@ -118,8 +118,9 @@ sensor:
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 0
-  # The time on the display: to the start during a delayed start, then to the end of the program.
-  # The machine revises it early in a program (one Cottons 60 went from 1:51 to 1:01)
+  # Minutes to the end of the program, from the display; unknown during a delayed start, when the
+  # display counts down to the start. The machine revises it early in a program (one Cottons 60
+  # went from 1:51 to 1:01)
   - platform: freemdu
     property: remaining_time
     id: mdu_remaining_time
@@ -128,7 +129,19 @@ sensor:
     device_class: duration
     accuracy_decimals: 0
     filters:
-      - multiply: 0.0166667
+      - lambda: return x / 60.0f;
+  # Minutes to the start during a delayed start, rounded up as the display shows them; unknown
+  # otherwise, including while the delay is being set
+  - platform: freemdu
+    property: start_delay
+    id: mdu_start_delay
+    name: Start Delay
+    unit_of_measurement: min
+    device_class: duration
+    accuracy_decimals: 0
+    icon: mdi:timer-play-outline
+    filters:
+      - lambda: return std::ceil(x / 60.0f);
   - platform: freemdu
     property: water_level
     id: mdu_water_level
