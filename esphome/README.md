@@ -302,6 +302,32 @@ Some properties are meaningful only while a program runs. On the W 471, for exam
 
 The [device packages](packages) name their entities after the properties' names, as the home firmware does. To keep existing entity IDs, remove the old MQTT device in Home Assistant first, then add the ESPHome device with the same `friendly_name` the MQTT device had. The values are the same strings, so automations and dashboards keep working.
 
+### Front panel card
+
+[`card/freemdu-panel-card.js`](card/freemdu-panel-card.js) is a dashboard card that draws a washing machine's front panel from the package entities: the display as seven segments, its indicator lamps, the program and phase, progress through the program, the option buttons, the spin setting, the status lamps and any fault that is set. It shows what a machine provides and leaves out the rest, so it works with any software ID. A preset for software IDs 457 and 132 adds the panel's own buttons and lamps, so the unlit ones show too.
+
+![The card for a W 471 and a W 925 in several states](card/demo.png)
+
+It is one file with no build step. Copy it to `/config/www/` in Home Assistant, add it as a dashboard resource (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
+
+```yaml
+type: custom:freemdu-panel-card
+device: 0123456789abcdef0123456789abcdef  # the ESPHome device, from its page's URL
+```
+
+| Option | | |
+|---|---|---|
+| `device` | one of these two | The device whose entities to use. They are found by the end of their entity IDs, so renamed devices and area prefixes do not matter. |
+| `prefix` | | Instead of `device`: the part of the entity IDs before the property, such as `washing_machine` for `sensor.washing_machine_program`. |
+| `name` | optional | The title. Defaults to the device's name. |
+| `preset` | optional | A software ID whose preset to use, or `generic` for none. Defaults to the value of `Software ID`. |
+| `entities` | optional | Entity IDs by key (such as `display_contents: sensor.my_display`), for entities found under another name. |
+| `faults` | optional | More binary sensors to show as faults while they are on. |
+
+Clicking the display, the program, a reading or the status opens that entity. The display's colour is the `--freemdu-led` CSS variable, which a theme can set.
+
+A preset is a few lines in `PRESETS` at the top of the file: the number of digits, the lamps beside the display, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `card/`, then open `demo.html`). Home Assistant is not needed for that.
+
 ## Estimating energy use
 
 Older appliances do not measure their own consumption, but the properties they do report show what draws the power. On a washing machine the heater accounts for most of the energy of a heated program, so the time its relay is on, multiplied by its rating, gives a usable estimate.
