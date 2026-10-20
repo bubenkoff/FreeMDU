@@ -698,7 +698,9 @@ impl<P: Read + Write> WashingMachine<P> {
     ///
     /// Unlike software ID 457, this firmware keeps counting the drum speed while the drum runs
     /// down after a spin (880, 509, 211 rpm in one W 925 log), so the speed tells when the drum
-    /// is still. Not yet confirmed as the moment the door can be opened.
+    /// is still. In two W 925 logs the door opened after a last reading of 211 and 241 rpm,
+    /// before the drum had stopped: consistent with the door being released below this threshold,
+    /// but the 10-second polls do not pin it down.
     pub async fn query_spinning(&mut self) -> Result<bool, P::Error> {
         let (current, _) = self.query_tachometer_speed().await?;
 
