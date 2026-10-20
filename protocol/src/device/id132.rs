@@ -342,6 +342,11 @@ bitflags::bitflags! {
     /// Each flag represents an option button on the front panel of the machine.
     #[derive(FlagsDisplay, FlagsDebug, PartialEq, Eq, Copy, Clone)]
     pub struct ProgramOption: u8 {
+        /// Door button held.
+        ///
+        /// The button sits on the same panel as the option buttons. The bit is set only
+        /// while the button is pressed, whether or not the machine releases the door.
+        const DoorButton = 0x01;
         /// Water plus option enabled.
         const WaterPlus = 0x04;
         /// Pre-wash option enabled.
@@ -913,6 +918,7 @@ mod tests {
     fn displays_program_options() {
         let opts = ProgramOption::from_bits_retain(0x18);
         assert_eq!(opts.to_string(), "PreWash | Soak");
+        assert_eq!(ProgramOption::DoorButton.to_string(), "DoorButton");
         assert_eq!(ProgramOption::empty().to_string(), "");
     }
 
