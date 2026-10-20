@@ -50,6 +50,9 @@ pub const FMDU_ERR_OTHER: i32 = -7;
 /// nothing at all. On the appliance's window, which reflects it, the fault is in the adapter
 /// (wiring, or flooded by light), not in alignment.
 pub const FMDU_ERR_NO_ECHO: i32 = -8;
+/// The property has no value in the appliance's current state, e.g. a remaining time while the
+/// display shows something else. Not a fault: [`fmdu_query_property`] logs nothing for it.
+pub const FMDU_ERR_UNAVAILABLE: i32 = -9;
 
 /// Maximum length of the text representation of a value, including the terminating NUL.
 pub const FMDU_TEXT_MAX: usize = 64;
@@ -515,6 +518,8 @@ pub unsafe extern "C" fn fmdu_property_find(
 
 /// Queries property `idx` from the device and stores its value in `*out`.
 ///
+/// Returns [`FMDU_ERR_UNAVAILABLE`] when the property has no value in the current state.
+///
 /// # Safety
 ///
 /// `dev` must be a valid device and `out` must be valid for writes.
@@ -542,6 +547,8 @@ pub unsafe extern "C" fn fmdu_query_property(
 
             FMDU_OK
         }
+        // Device implementations report a value that does not exist right now this way
+        Err(Error::InvalidState) => FMDU_ERR_UNAVAILABLE,
         Err(err) => {
             log::warn!("Failed to query property {}: {err}", prop.id);
 
@@ -619,6 +626,7 @@ pub extern "C" fn fmdu_status_str(status: i32) -> *const c_char {
         FMDU_ERR_ARGUMENT => b"Invalid argument\0",
         FMDU_ERR_DEVICE => b"Unexpected device state or value\0",
         FMDU_ERR_NO_ECHO => b"No echo from the sensor\0",
+        FMDU_ERR_UNAVAILABLE => b"No value in the current state\0",
         _ => b"Error\0",
     };
 
