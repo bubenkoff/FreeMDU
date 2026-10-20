@@ -57,7 +57,7 @@ This is the [example](example/xiao-esp32c6-w471.yaml). The Rust library is inclu
 | Package | Contents |
 |---|---|
 | [`xiao-esp32c6.yaml`](packages/xiao-esp32c6.yaml) | Board, ESP-IDF framework, the board LED as a link light (see [Checking the adapter](#checking-the-adapter)), the antenna switch of the XIAO ESP32-C6, and the UART `mdu_uart` on pins `0` (RX) and `1` (TX) |
-| [`id457.yaml`](packages/id457.yaml) | Every property of software ID 457 (Miele W 471). `Operating State` keeps the device's codes for automations; the other text sensors show display names. `Load Level` is the machine's own weighing of the dry laundry in kg, and `Program Max Load` the most the selected program takes |
+| [`id457.yaml`](packages/id457.yaml) | Every property of software ID 457 (Miele W 471). `Operating State` keeps the device's codes for automations; the other text sensors show display names. `Load Level` is the machine's own weighing of the dry laundry in kg, and `Program Max Load` the most the selected program takes. `Remaining Time` is unknown whenever the display shows something other than the time |
 | [`energy.yaml`](packages/energy.yaml) | The [energy estimate](#estimating-energy-use) with its three sensors. Software ID 457 estimates its own power and needs no variables; for others, set `heater_power`, and optionally `running_power`, `standby_power` and `drum_power_per_1000_rpm` |
 | [`freemdu.yaml`](packages/freemdu.yaml) | Included by every device package: the external component, the logger, the hub (polling every 10 s), and the adapter's `Connected`, `Adapter Status`, `Software ID`, `WiFi Signal`, and the `Adapter Test` button with its `Adapter Test Result` |
 
