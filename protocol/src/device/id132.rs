@@ -131,6 +131,12 @@ const PROP_REMAINING_TIME: Property = Property {
     name: "Remaining Time",
     unit: None,
 };
+const PROP_START_DELAY: Property = Property {
+    kind: PropertyKind::Operation,
+    id: "start_delay",
+    name: "Start Delay",
+    unit: None,
+};
 const PROP_ACTIVE_ACTUATORS: Property = Property {
     kind: PropertyKind::Io,
     id: "active_actuators",
@@ -620,12 +626,36 @@ impl<P: Read + Write> WashingMachine<P> {
         })
     }
 
-    /// Queries the time left as shown on the display (see [`Self::query_display_contents`]).
+    /// Queries the time left until the end of the program, as shown on the display (see
+    /// [`Self::query_display_contents`]).
+    ///
+    /// Fails with [`Error::InvalidState`] during a delayed start, when the display counts down to
+    /// the start instead (see [`Self::query_start_delay`]).
     pub async fn query_remaining_time(&mut self) -> Result<Duration, P::Error> {
+        if self.query_program_phase().await? == ProgramPhase::DelayedStart {
+            return Err(Error::InvalidState);
+        }
+
         let [hours, tens, mins] = self.query_display().await?;
         let total_mins = u64::from(hours) * 60 + u64::from(tens) * 10 + u64::from(mins);
 
         Ok(Duration::from_secs(total_mins * 60))
+    }
+
+    /// Queries the time left until a delayed start, to the second.
+    ///
+    /// The display shows it rounded up to whole minutes. Fails with [`Error::InvalidState`] when
+    /// no delayed start is counting down, including while the delay is being set.
+    pub async fn query_start_delay(&mut self) -> Result<Duration, P::Error> {
+        if self.query_program_phase().await? != ProgramPhase::DelayedStart {
+            return Err(Error::InvalidState);
+        }
+
+        // During a delayed start, 0x0002 counts the seconds down to the start (1800 to 0 for a
+        // 30-minute delay on a W 925); in other phases it holds a different timer.
+        let secs: u16 = self.intf.read_memory(0x0002).await?;
+
+        Ok(Duration::from_secs(secs.into()))
     }
 
     /// Queries the currently active actuators.
@@ -790,6 +820,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_PHASE,
             PROP_DISPLAY_CONTENTS,
             PROP_REMAINING_TIME,
+            PROP_START_DELAY,
             PROP_ACTIVE_ACTUATORS,
             PROP_NTC_RESISTANCE,
             PROP_TARGET_TEMPERATURE,
@@ -830,6 +861,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
             PROP_PROGRAM_PHASE => Ok(self.query_program_phase().await?.to_string().into()),
             PROP_DISPLAY_CONTENTS => Ok(self.query_display_contents().await?.into()),
             PROP_REMAINING_TIME => Ok(self.query_remaining_time().await?.into()),
+            PROP_START_DELAY => Ok(self.query_start_delay().await?.into()),
             // Input/output
             PROP_ACTIVE_ACTUATORS => Ok(self.query_active_actuators().await?.to_string().into()),
             PROP_NTC_RESISTANCE => Ok(self.query_ntc_resistance().await?.into()),
