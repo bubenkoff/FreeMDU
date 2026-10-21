@@ -8,7 +8,7 @@
 //
 // One file, no build step and no dependencies. See esphome/README.md, "Front panel card".
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 // Entities the card looks for, by the object ID the packages give them
 const SENSORS = [
@@ -333,13 +333,13 @@ class FreemduPanelCard extends HTMLElement {
     return `
       <div class="head">
         <div class="name">${esc(this._deviceName())}</div>
-        <div class="pill ${status.tone}" data-entity="${esc(this._entities.map.status ?? this._entities.map.phase ?? "")}">${esc(status.text)}</div>
+        <div class="pill ${status.tone}" data-entity="${esc(this._entities.map.status ?? this._entities.map.phase ?? "")}"><i></i>${esc(status.text)}</div>
       </div>
       <div class="program" data-entity="${esc(this._entities.map.program ?? "")}">
         <div class="title">${esc(program ? this._human(program) : online ? "No program" : "—")}</div>
         <div class="sub">${esc(phase ? this._human(phase) : "")}</div>
       </div>
-      <div class="middle">
+      <div class="panel ${online ? "" : "off"}">
         ${this._displayBlock(preset, online)}
         ${this._indicators(preset, online)}
       </div>
@@ -360,7 +360,12 @@ class FreemduPanelCard extends HTMLElement {
   }
 
   _lamp(label, lit, extra = "") {
-    return `<span class="lamp ${lit ? "lit" : ""} ${extra}">${esc(label)}</span>`;
+    return `<span class="lamp ${lit ? "lit" : ""} ${extra}"><i></i>${esc(label)}</span>`;
+  }
+
+  // A button on the panel, with the lamp it lights
+  _button(label, lit) {
+    return `<span class="button ${lit ? "lit" : ""}"><i></i>${esc(label)}</span>`;
   }
 
   _indicators(preset, online) {
@@ -390,14 +395,17 @@ class FreemduPanelCard extends HTMLElement {
     const delay = this._num("start_delay");
     const remaining = this._num("remaining_time");
     const parts = [];
-    if (delay !== null) parts.push(`Starts at ${esc(formatClock(this._hass, new Date(now.getTime() + delay * 60000)))}`);
+    if (delay !== null) {
+      parts.push(`<span>starts at <b>${esc(formatClock(this._hass, new Date(now.getTime() + delay * 60000)))}</b></span>`);
+    }
     if (remaining !== null) {
       const h = Math.floor(remaining / 60);
       const m = Math.round(remaining % 60);
       const left = h ? `${h} h ${m} min` : `${m} min`;
-      parts.push(`${left} left · ends at ${esc(formatClock(this._hass, new Date(now.getTime() + remaining * 60000)))}`);
+      parts.push(`<span><b>${left}</b> left</span>`);
+      parts.push(`<span>ends at ${esc(formatClock(this._hass, new Date(now.getTime() + remaining * 60000)))}</span>`);
     }
-    return parts.length ? `<div class="times">${parts.join(" · ")}</div>` : "";
+    return parts.length ? `<div class="times">${parts.join("")}</div>` : "";
   }
 
   _stages(phase) {
@@ -411,25 +419,29 @@ class FreemduPanelCard extends HTMLElement {
       const cls = i === current ? "lit" : done ? "done" : "";
       return `<span class="stage ${cls}"><i></i>${esc(s.label)}</span>`;
     });
-    return `<div class="stages">${items.join("")}</div>`;
+    // The track runs between the first and the last dot, each in the middle of its column
+    const span = 100 - 100 / STAGES.length;
+    const fill = current > 0 ? (span * current) / (STAGES.length - 1) : 0;
+    const style = `--track-inset: ${50 / STAGES.length}%; --track-fill: ${fill}%`;
+    return `<div class="stages" style="${style}">${items.join("")}</div>`;
   }
 
   _options(preset) {
     if (!this._has("options")) return "";
     const flags = this._flags("options");
     const known = new Set([...(preset.options ?? []), ...(preset.lamps ?? [])].flatMap((o) => o.match.map(norm)));
-    const lamps = (preset.options ?? []).map((o) => this._lamp(o.label, o.match.some((m) => flags.has(norm(m)))));
+    const lamps = (preset.options ?? []).map((o) => this._button(o.label, o.match.some((m) => flags.has(norm(m)))));
     // Options the preset does not know about show while they are set
     const raw = (this._val("options") ?? "").split(/\s*[,|]\s*/).filter(Boolean);
-    for (const name of raw) if (!known.has(norm(name))) lamps.push(this._lamp(this._human(name), true));
-    return lamps.length ? `<div class="row"><span class="label">Options</span>${lamps.join("")}</div>` : "";
+    for (const name of raw) if (!known.has(norm(name))) lamps.push(this._button(this._human(name), true));
+    return lamps.length ? `<div class="group"><span class="label">Options</span><div class="buttons">${lamps.join("")}</div></div>` : "";
   }
 
   _spin(preset) {
     if (!this._has("spin_setting") && !this._has("program_spin_speed")) return "";
     const setting = this._val("spin_setting");
     if (!preset.spin) {
-      return setting ? `<div class="row"><span class="label">Spin</span>${this._lamp(this._human(setting), true)}</div>` : "";
+      return setting ? `<div class="group"><span class="label">Spin</span><div class="buttons">${this._button(this._human(setting), true)}</div></div>` : "";
     }
     // A named setting lights its own lamp; otherwise the speed picks the lamp
     const named = setting && preset.spin.find((s) => typeof s === "string" && norm(s) === norm(setting));
@@ -438,9 +450,9 @@ class FreemduPanelCard extends HTMLElement {
     if (rpm === null && setting) rpm = Number(/(\d{3,4})/.exec(setting)?.[1] ?? NaN);
     const lamps = preset.spin.map((s) => {
       const lit = typeof s === "string" ? s === named : !named && s === rpm;
-      return this._lamp(typeof s === "number" ? String(s) : s, lit);
+      return this._button(typeof s === "number" ? String(s) : s, lit);
     });
-    return `<div class="row"><span class="label">Spin</span>${lamps.join("")}</div>`;
+    return `<div class="group"><span class="label">Spin</span><div class="buttons spin">${lamps.join("")}</div></div>`;
   }
 
   _statusLamps(preset) {
@@ -462,7 +474,7 @@ class FreemduPanelCard extends HTMLElement {
       if (norm(label).startsWith(prefix)) label = label.slice(this._deviceName().length).trim();
       lamps.push(this._lamp(label, true, "fault"));
     }
-    return lamps.length ? `<div class="row status">${lamps.join("")}</div>` : "";
+    return lamps.length ? `<div class="lamps">${lamps.join("")}</div>` : "";
   }
 
   _readouts() {
@@ -506,47 +518,80 @@ class FreemduPanelCard extends HTMLElement {
 const STYLE = `
   :host {
     --freemdu-led: #ff4436;
-    --freemdu-display-bg: #160b0a;
+    --freemdu-display-bg: #140908;
+    --freemdu-panel-bg: var(--secondary-background-color, rgba(127, 127, 127, 0.08));
+    --freemdu-radius: 12px;
   }
-  ha-card { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  ha-card { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
   [data-entity]:not([data-entity=""]) { cursor: pointer; }
+
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .name { font-size: 1.1em; font-weight: 500; color: var(--primary-text-color); }
-  .pill { font-size: 0.85em; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--divider-color); color: var(--secondary-text-color); white-space: nowrap; }
-  .pill.run { color: var(--freemdu-led); border-color: var(--freemdu-led); }
-  .pill.wait { color: var(--warning-color, #ff9800); border-color: var(--warning-color, #ff9800); }
-  .pill.done { color: var(--success-color, #4caf50); border-color: var(--success-color, #4caf50); }
-  .program .title { font-size: 1.5em; line-height: 1.2; color: var(--primary-text-color); }
-  .program .sub { color: var(--secondary-text-color); min-height: 1.2em; }
-  .middle { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .display { background: var(--freemdu-display-bg); border-radius: 8px; padding: 10px 14px; line-height: 0; }
-  .digits { height: 56px; width: auto; }
-  .digits .on { fill: var(--freemdu-led); filter: drop-shadow(0 0 3px var(--freemdu-led)); }
-  .digits .off { fill: var(--freemdu-led); opacity: 0.08; }
-  .display.dark .digits .off { opacity: 0.05; }
-  .indicators { display: flex; flex-direction: column; gap: 6px; }
-  .lamp { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--secondary-text-color); white-space: nowrap; }
-  .lamp::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--divider-color); flex: none; }
+  .name { font-size: 1.05em; font-weight: 500; color: var(--secondary-text-color); letter-spacing: 0.01em; }
+  .pill { position: relative; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8em; font-weight: 500; padding: 3px 10px; border-radius: 999px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; }
+  .pill::after { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0.12; border-radius: inherit; }
+  .pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.run { color: var(--freemdu-led); }
+  .pill.run i { animation: pulse 1.6s ease-in-out infinite; }
+  .pill.wait { color: var(--warning-color, #ff9800); }
+  .pill.done { color: var(--success-color, #43a047); }
+  .pill.off i { opacity: 0.4; }
+
+  .program .title { font-size: 1.6em; font-weight: 400; line-height: 1.2; color: var(--primary-text-color); }
+  .program .sub { margin-top: 2px; color: var(--secondary-text-color); min-height: 1.2em; }
+
+  .panel { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px; border-radius: calc(var(--freemdu-radius) + 4px); background: var(--freemdu-panel-bg); }
+  .display { position: relative; padding: 12px 16px; border-radius: var(--freemdu-radius); line-height: 0; overflow: hidden;
+    background: radial-gradient(120% 140% at 50% 0%, #2a1311 0%, var(--freemdu-display-bg) 60%);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 0 rgba(255, 255, 255, 0.06); }
+  .display::after { content: ""; position: absolute; inset: 0 0 55% 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0)); pointer-events: none; }
+  .digits { height: 60px; width: auto; }
+  .digits .on { fill: var(--freemdu-led); filter: drop-shadow(0 0 2px var(--freemdu-led)) drop-shadow(0 0 8px var(--freemdu-led)); }
+  .digits .off { fill: var(--freemdu-led); opacity: 0.07; }
+  .panel.off .display { background: var(--freemdu-display-bg); }
+  .panel.off .digits .off { opacity: 0.04; }
+
+  .indicators, .lamps { display: flex; gap: 8px 16px; }
+  .indicators { flex-direction: column; }
+  .lamps { flex-wrap: wrap; }
+  .lamp { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85em; color: var(--secondary-text-color); white-space: nowrap; }
+  .lamp i, .button i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgba(127, 127, 127, 0.25); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
   .lamp.lit { color: var(--primary-text-color); }
-  .lamp.lit::before { background: var(--freemdu-led); box-shadow: 0 0 6px var(--freemdu-led); }
+  .lamp.lit i, .button.lit i { background: radial-gradient(circle at 35% 35%, #fff 0, var(--freemdu-led) 45%); box-shadow: 0 0 4px var(--freemdu-led), 0 0 10px var(--freemdu-led); }
   .lamp.fault { color: var(--error-color, #db4437); font-weight: 500; }
-  .times { color: var(--primary-text-color); }
-  .stages { display: flex; justify-content: space-between; gap: 4px; position: relative; }
-  .stages::before { content: ""; position: absolute; left: 6%; right: 6%; top: 5px; border-top: 1px solid var(--divider-color); }
-  .stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; font-size: 0.8em; color: var(--secondary-text-color); text-align: center; }
-  .stage i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color, #fff)); }
-  .stage.done i { background: var(--secondary-text-color); border-color: var(--secondary-text-color); }
-  .stage.lit { color: var(--primary-text-color); }
-  .stage.lit i { background: var(--freemdu-led); border-color: var(--freemdu-led); box-shadow: 0 0 6px var(--freemdu-led); }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-  .row .label { width: 100%; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--secondary-text-color); }
-  .readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; border-top: 1px solid var(--divider-color); padding-top: 12px; }
-  .readout { display: flex; flex-direction: column; gap: 2px; }
+  .lamp.fault i { animation: pulse 1.2s ease-in-out infinite; }
+
+  .times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: var(--secondary-text-color); }
+  .times b { font-size: 1.35em; font-weight: 500; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
+
+  .stages { position: relative; display: flex; padding-top: 2px; }
+  .stages::before, .stages::after { content: ""; position: absolute; top: 7px; left: var(--track-inset); height: 2px; border-radius: 1px; }
+  .stages::before { right: var(--track-inset); background: var(--divider-color); }
+  .stages::after { width: var(--track-fill); background: var(--freemdu-led); opacity: 0.6; }
+  .stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 0.78em; color: var(--secondary-text-color); text-align: center; }
+  .stage i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color, #fff)); }
+  .stage.done i { border-color: var(--freemdu-led); background: var(--freemdu-led); opacity: 0.6; }
+  .stage.lit { color: var(--primary-text-color); font-weight: 500; }
+  .stage.lit i { border-color: var(--freemdu-led); background: var(--freemdu-led); box-shadow: 0 0 0 4px var(--ha-card-background, var(--card-background-color, #fff)), 0 0 10px 4px var(--freemdu-led); }
+
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: 0.72em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary-text-color); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+  .button { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 0.82em; color: var(--secondary-text-color); white-space: nowrap; border: 1px solid var(--divider-color); }
+  .button.lit { color: var(--primary-text-color); border-color: var(--freemdu-led); }
+  .button.lit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--freemdu-led); opacity: 0.08; pointer-events: none; }
+  .buttons.spin .button { font-variant-numeric: tabular-nums; }
+
+  .readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+  .readout { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border-radius: var(--freemdu-radius); background: var(--freemdu-panel-bg); }
   .readout.wide { grid-column: 1 / -1; }
-  .readout span { font-size: 0.75em; color: var(--secondary-text-color); }
-  .readout b { font-weight: 500; color: var(--primary-text-color); }
-  .foot { font-size: 0.75em; color: var(--secondary-text-color); text-align: right; }
+  .readout span { font-size: 0.72em; color: var(--secondary-text-color); }
+  .readout b { font-size: 1.05em; font-weight: 500; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
+
+  .foot { margin-top: -4px; font-size: 0.72em; color: var(--secondary-text-color); text-align: right; opacity: 0.8; }
   .foot:empty { display: none; }
+
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .pill.run i, .lamp.fault i { animation: none; } }
 `;
 
 // Loaded twice when a dashboard names both a copy of this file and the component's loader
