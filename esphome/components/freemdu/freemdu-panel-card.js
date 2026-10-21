@@ -8,7 +8,7 @@
 //
 // One file, no build step and no dependencies. See esphome/README.md, "Front panel card".
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 // Entities the card looks for, by the object ID the packages give them
 const SENSORS = [
@@ -549,11 +549,14 @@ const STYLE = `
   .foot:empty { display: none; }
 `;
 
-customElements.define("freemdu-panel-card", FreemduPanelCard);
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "freemdu-panel-card",
-  name: "FreeMDU front panel",
-  description: "The front panel of a washing machine connected with FreeMDU",
-});
-console.info(`%c FREEMDU-PANEL-CARD %c ${VERSION} `, "color: white; background: #c0392b", "");
+// Loaded twice when a dashboard names both a copy of this file and the component's loader
+if (!customElements.get("freemdu-panel-card")) {
+  customElements.define("freemdu-panel-card", FreemduPanelCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "freemdu-panel-card",
+    name: "FreeMDU front panel",
+    description: "The front panel of a washing machine connected with FreeMDU",
+  });
+  console.info(`%c FREEMDU-PANEL-CARD %c ${VERSION} `, "color: white; background: #c0392b", "");
+}

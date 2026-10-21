@@ -14,6 +14,8 @@ substitutions:
   update_interval: 10s
   # How long values are kept when polls fail, before they turn unknown
   hold_time: 30s
+  # Install the front panel card in Home Assistant at every build (with the ESPHome add-on)
+  dashboard_card: "true"
 
 external_components:
   - source:
@@ -32,6 +34,7 @@ freemdu:
   uart_id: mdu_uart
   update_interval: ${update_interval}
   hold_time: ${hold_time}
+  dashboard_card: ${dashboard_card}
 
 binary_sensor:
   - platform: freemdu

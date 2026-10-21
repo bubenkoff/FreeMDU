@@ -1,9 +1,11 @@
 """ESPHome component for Miele appliances, built on the FreeMDU protocol crate.
 
 The device implementations are the Rust ones from `protocol/`, linked in as a static library
-(`../../ffi`). This file only describes the configuration and links that library.
+(`../../ffi`). This file describes the configuration, links that library and, if asked, installs
+the dashboard card in Home Assistant.
 """
 
+import logging
 from pathlib import Path
 
 import esphome.codegen as cg
@@ -29,6 +31,8 @@ from esphome.const import (
 )
 from esphome.core import CORE, EsphomeError
 
+_LOGGER = logging.getLogger(__name__)
+
 CODEOWNERS = ["@bubenkoff"]
 DEPENDENCIES = ["uart"]
 AUTO_LOAD = ["sensor"]
@@ -48,6 +52,23 @@ CONF_PROGRAM_ENERGY = "program_energy"
 CONF_MEMORY_LOG = "memory_log"
 CONF_ADDRESS = "address"
 CONF_LENGTH = "length"
+CONF_DASHBOARD_CARD = "dashboard_card"
+
+CARD = Path(__file__).parent / "freemdu-panel-card.js"
+# Home Assistant serves /local/ with a month-long cache, so the file the dashboard resource names
+# must never change. It loads the card under the card's current ETag instead, so the card of a new
+# build shows up at the next page load without touching the resource.
+CARD_LOADER = """\
+// Written by the FreeMDU ESPHome component; loads card.js, which each build replaces.
+const card = new URL("card.js", import.meta.url);
+try {
+  const head = await fetch(card, { method: "HEAD", cache: "no-store" });
+  card.searchParams.set("v", (head.headers.get("etag") || "").replace(/\\W/g, ""));
+} catch (e) {
+  card.searchParams.set("v", Date.now());
+}
+await import(card.href);
+"""
 
 freemdu_ns = cg.esphome_ns.namespace("freemdu")
 FreeMDUComponent = freemdu_ns.class_(
@@ -149,6 +170,9 @@ CONFIG_SCHEMA = cv.All(
                 CONF_RECONNECT_INTERVAL, default="1s"
             ): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_ENERGY): ENERGY_SCHEMA,
+            # Copy the dashboard card into Home Assistant's www/freemdu/ at every build, when
+            # ESPHome runs inside Home Assistant's configuration directory (as the add-on does)
+            cv.Optional(CONF_DASHBOARD_CARD, default=False): cv.boolean,
             # Log a range of the device's memory at every poll, for mapping a new device
             cv.Optional(CONF_MEMORY_LOG): cv.Schema(
                 {
@@ -180,6 +204,40 @@ FREEMDU_CHILD_SCHEMA = cv.Schema(
 )
 
 
+def _write_if_changed(path: Path, content: bytes) -> bool:
+    if path.is_file() and path.read_bytes() == content:
+        return False
+    path.write_bytes(content)
+    return True
+
+
+def _install_dashboard_card():
+    """Copies the card and its loader to www/freemdu/ of the Home Assistant configuration that
+    holds ESPHome's directory, as with the add-on (/config/esphome)."""
+    ha_config = Path(CORE.config_dir).resolve().parent
+    if not (ha_config / "configuration.yaml").is_file():
+        _LOGGER.warning(
+            "dashboard_card: %s is not in a Home Assistant configuration directory; "
+            "the card is not installed",
+            CORE.config_dir,
+        )
+        return
+    www = ha_config / "www"
+    had_www = www.is_dir()
+    target = www / "freemdu"
+    target.mkdir(parents=True, exist_ok=True)
+    changed = _write_if_changed(target / "card.js", CARD.read_bytes())
+    changed |= _write_if_changed(target / "freemdu-panel-card.js", CARD_LOADER.encode())
+    if changed:
+        _LOGGER.info("dashboard_card: installed in %s", target)
+    if not had_www:
+        _LOGGER.warning(
+            "dashboard_card: created %s; Home Assistant serves it as /local/ "
+            "only after its next restart",
+            www,
+        )
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -190,6 +248,9 @@ async def to_code(config):
     cg.add(var.set_protocol_log(config[CONF_PROTOCOL_LOG]))
     cg.add(var.set_hold_time(config[CONF_HOLD_TIME]))
     cg.add(var.set_reconnect_interval(config[CONF_RECONNECT_INTERVAL]))
+
+    if config[CONF_DASHBOARD_CARD]:
+        _install_dashboard_card()
 
     if memory_log := config.get(CONF_MEMORY_LOG):
         cg.add(var.set_memory_log(memory_log[CONF_ADDRESS], memory_log[CONF_LENGTH]))
