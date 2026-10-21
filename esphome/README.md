@@ -67,6 +67,7 @@ Variables of the common part, set under `substitutions:` in your file or as `var
 |---|---|---|
 | `update_interval` | `10s` | How often the appliance is polled. A poll of every property takes a few seconds at 2400 baud; a poll still running when the next is due is skipped |
 | `hold_time` | `30s` | How long values are kept while polls fail, before they turn unknown (see [Hub](#hub)) |
+| `dashboard_card` | `true` | Install the [front panel card](#front-panel-card) in Home Assistant at every build |
 | `freemdu_url`, `freemdu_ref` | this repository | Where the component is built from, to try a branch |
 | `freemdu_refresh` | `1d` | How often ESPHome fetches the component again. ESPHome keeps git sources for a day, so after a push to the branch you build from, set this to `always` and add `refresh: always` to your `packages:` entry; otherwise the next day's build picks it up |
 
@@ -159,6 +160,7 @@ freemdu:
 | `protocol_log` | `false` | Log every request and transferred byte, at `DEBUG`, so no change to the logger's level is needed. Very verbose; meant for debugging a new device or adapter. Without it, the component logs every change of a property's value at `DEBUG` (`operating_state: ProgramRunning (Running)`), plus connections and failed polls. |
 | `memory_log` | | Log a range of the device's memory at every poll, for mapping a new device: `address` and `length` (a multiple of 16, at most 4096). See [Mapping a new device](#mapping-a-new-device). |
 | `energy` | | Energy estimate, see [Estimating energy use](#estimating-energy-use). |
+| `dashboard_card` | `false` | Copy the [front panel card](#front-panel-card) into Home Assistant's `www/freemdu/` at every build. Works when ESPHome's directory is inside Home Assistant's configuration, as with the add-on; otherwise the build logs a warning and goes on. |
 
 ### Properties
 
@@ -308,7 +310,7 @@ The [device packages](packages) name their entities after the properties' names,
 
 ![The card for a W 471 and a W 925 in several states](card/demo.png)
 
-It is one file with no build step. Copy it to `/config/www/` in Home Assistant, add it as a dashboard resource (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
+The component installs it. With `dashboard_card: true`, which the packages set, every build copies the card to `www/freemdu/` of the Home Assistant configuration, as long as ESPHome runs inside it, as the add-on does (`/config/esphome`). Add it as a dashboard resource once (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
 
 ```yaml
 type: custom:freemdu-panel-card
@@ -323,6 +325,8 @@ device: 0123456789abcdef0123456789abcdef  # the ESPHome device, from its page's 
 | `preset` | optional | A software ID whose preset to use, or `generic` for none. Defaults to the value of `Software ID`. |
 | `entities` | optional | Entity IDs by key (such as `display_contents: sensor.my_display`), for entities found under another name. |
 | `faults` | optional | More binary sensors to show as faults while they are on. |
+
+The resource's file is a small loader that never changes, because Home Assistant serves `/local/` with a month-long cache; it loads the card next to it, `card.js`, under that file's current ETag. So the card of a new build shows up at the next page load, with no resource to edit. If the `www` directory did not exist, Home Assistant serves it only after its next restart. Without the add-on, copy `freemdu-panel-card.js` to `/config/www/` and add it as `/local/freemdu-panel-card.js?v=1`, raising the number with each new copy.
 
 Clicking the display, the program, a reading or the status opens that entity. The display's colour is the `--freemdu-led` CSS variable, which a theme can set.
 
