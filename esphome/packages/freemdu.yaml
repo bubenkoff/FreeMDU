@@ -14,8 +14,9 @@ substitutions:
   update_interval: 10s
   # How long values are kept when polls fail, before they turn unknown
   hold_time: 30s
-  # Install the front panel card in Home Assistant at every build (with the ESPHome add-on)
-  dashboard_card: "true"
+  # "true" installs the front panel card in Home Assistant at every build (with the ESPHome
+  # add-on); off unless asked for, since it writes into Home Assistant's configuration
+  dashboard_card: "false"
 
 external_components:
   - source:
