@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FreeMDU panel card demo</title>
 <!--
-  Shows freemdu-panel-card with made-up states, without Home Assistant. Serve this directory
-  (python3 -m http.server) and open demo.html. To try a preset for another software ID, add a
-  scenario below with that ID and the states its package produces.
+  Shows freemdu-panel-card with made-up states, without Home Assistant. The card itself is in
+  the component's directory, so serve esphome/ (python3 -m http.server) and open card/demo.html.
+  To try a preset for another software ID, add a scenario below with that ID and the states its
+  package produces.
 -->
 <style>
   :root {
@@ -35,7 +36,7 @@
 <script>
   customElements.define("ha-card", class extends HTMLElement {});
 </script>
-<script src="freemdu-panel-card.js"></script>
+<script src="../components/freemdu/freemdu-panel-card.js"></script>
 <script>
   const minutes = (n) => String(n);
   const W471 = {

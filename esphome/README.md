@@ -304,7 +304,7 @@ The [device packages](packages) name their entities after the properties' names,
 
 ### Front panel card
 
-[`card/freemdu-panel-card.js`](card/freemdu-panel-card.js) is a dashboard card that draws a washing machine's front panel from the package entities: the display as seven segments, its indicator lamps, the program and phase, progress through the program, the option buttons, the spin setting, the status lamps and any fault that is set. It shows what a machine provides and leaves out the rest, so it works with any software ID. A preset for software IDs 457 and 132 adds the panel's own buttons and lamps, so the unlit ones show too.
+[`freemdu-panel-card.js`](components/freemdu/freemdu-panel-card.js), in the component's directory, is a dashboard card that draws a washing machine's front panel from the package entities: the display as seven segments, its indicator lamps, the program and phase, progress through the program, the option buttons, the spin setting, the status lamps and any fault that is set. It shows what a machine provides and leaves out the rest, so it works with any software ID. A preset for software IDs 457 and 132 adds the panel's own buttons and lamps, so the unlit ones show too.
 
 ![The card for a W 471 and a W 925 in several states](card/demo.png)
 
@@ -326,7 +326,7 @@ device: 0123456789abcdef0123456789abcdef  # the ESPHome device, from its page's 
 
 Clicking the display, the program, a reading or the status opens that entity. The display's colour is the `--freemdu-led` CSS variable, which a theme can set.
 
-A preset is a few lines in `PRESETS` at the top of the file: the number of digits, the lamps beside the display, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `card/`, then open `demo.html`). Home Assistant is not needed for that.
+A preset is a few lines in `PRESETS` at the top of the file: the number of digits, the lamps beside the display, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `esphome/`, then open `card/demo.html`). Home Assistant is not needed for that.
 
 ## Estimating energy use
 
