@@ -308,7 +308,11 @@ The [device packages](packages) name their entities after the properties' names,
 
 [`freemdu-panel-card.js`](components/freemdu/freemdu-panel-card.js), in the component's directory, is a dashboard card that draws a washing machine's front panel from the package entities: the display as seven segments, its indicator lamps, the program and phase, progress through the program, the option buttons, the spin setting, the status lamps and any fault that is set. It shows what a machine provides and leaves out the rest, so it works with any software ID. A preset for software IDs 457 and 132 adds the panel's own buttons and lamps, so the unlit ones show too.
 
-![The card for a W 471 and a W 925 in several states](card/demo.png)
+| Light theme | Dark theme |
+|---|---|
+| ![The card for a W 471 and a W 925 in several states, light theme](card/demo.png) | ![The same states in a dark theme](card/demo-dark.png) |
+
+It takes its colours from the Home Assistant theme, so it follows a dark theme by itself; the display stays dark in both.
 
 The component installs it. With `dashboard_card: true`, which the packages set, every build copies the card to `www/freemdu/` of the Home Assistant configuration, as long as ESPHome runs inside it, as the add-on does (`/config/esphome`). Add it as a dashboard resource once (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
 
