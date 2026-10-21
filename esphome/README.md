@@ -67,7 +67,7 @@ Variables of the common part, set under `substitutions:` in your file or as `var
 |---|---|---|
 | `update_interval` | `10s` | How often the appliance is polled. A poll of every property takes a few seconds at 2400 baud; a poll still running when the next is due is skipped |
 | `hold_time` | `30s` | How long values are kept while polls fail, before they turn unknown (see [Hub](#hub)) |
-| `dashboard_card` | `true` | Install the [front panel card](#front-panel-card) in Home Assistant at every build |
+| `dashboard_card` | `false` | `true` installs the [front panel card](#front-panel-card) in Home Assistant at every build |
 | `freemdu_url`, `freemdu_ref` | this repository | Where the component is built from, to try a branch |
 | `freemdu_refresh` | `1d` | How often ESPHome fetches the component again. ESPHome keeps git sources for a day, so after a push to the branch you build from, set this to `always` and add `refresh: always` to your `packages:` entry; otherwise the next day's build picks it up |
 
@@ -314,7 +314,7 @@ The [device packages](packages) name their entities after the properties' names,
 
 It takes its colours from the Home Assistant theme, so it follows a dark theme by itself; the display stays dark in both.
 
-The component installs it. With `dashboard_card: true`, which the packages set, every build copies the card to `www/freemdu/` of the Home Assistant configuration, as long as ESPHome runs inside it, as the add-on does (`/config/esphome`). Add it as a dashboard resource once (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
+The component installs it if asked to, which it is not by default. With `dashboard_card: "true"` under `substitutions:` (or `dashboard_card: true` under `freemdu:` without the packages), every build copies the card to `www/freemdu/` of the Home Assistant configuration, as long as ESPHome runs inside it, as the add-on does (`/config/esphome`). Add it as a dashboard resource once (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
 
 ```yaml
 type: custom:freemdu-panel-card
