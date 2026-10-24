@@ -334,7 +334,7 @@ The resource's file is a small loader that never changes, because Home Assistant
 
 Clicking the display, the program, a reading or the status opens that entity. The display's colour is the `--freemdu-led` CSS variable, which a theme can set.
 
-A preset is a few lines in `PRESETS` at the top of the file: the number of digits, the lamps beside the display, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `esphome/`, then open `card/demo.html`). Home Assistant is not needed for that.
+A preset is a few lines in `PRESETS` at the top of the file: the number of digits and how they are grouped (the W 925 has one for the hours and two for the minutes), the lamps beside the display and their order, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `esphome/`, then open `card/demo.html`). Home Assistant is not needed for that.
 
 ## Estimating energy use
 

@@ -8,7 +8,7 @@
 //
 // One file, no build step and no dependencies. See esphome/README.md, "Front panel card".
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 // Entities the card looks for, by the object ID the packages give them
 const SENSORS = [
@@ -45,9 +45,12 @@ const FAULT_PATTERN = /(^|_)(fault_f\d+.*|detergent_overdose)$/;
 
 // What a preset may hold, all optional:
 //   digits:     number of digits on the display
+//   groups:     how the digits are grouped, left to right, such as [1, 2] for hours and minutes;
+//               the display text then fills them from the right, with a gap between groups
 //   indicators: lamps beside the display, lit when Display Indicator matches one of `match`
 //   options:    the option buttons in panel order, lit when Options holds one of `match`
 //   lamps:      other lamps lit from Options, such as a door button
+//   delay_first: the Start delay lamp sits above the others beside the display
 //   spin:       the spin selector's lamps: a number is a speed in rpm, a string a named setting
 //
 // Values are compared ignoring case, spaces and punctuation, so both the `code` and the `text`
@@ -69,16 +72,20 @@ const PRESETS = {
     ],
     spin: [1600, 1400, 1200, 900, 600, 400, "Rinse hold", "No spin"],
   },
-  // Miele W 925 and other machines with software ID 132
+  // Miele W 925 and other machines with software ID 132. The display has one digit for the
+  // hours and two for the minutes, with Start delay above Remaining time beside it. The door
+  // button sits in the same row as the options, left of the on/off button, which reports nothing
   132: {
     digits: 3,
+    groups: [1, 2],
+    delay_first: true,
     options: [
-      { label: "Water plus", match: ["WaterPlus"] },
-      { label: "Pre-wash", match: ["PreWash"] },
+      { label: "Door", match: ["DoorButton"] },
       { label: "Soak", match: ["Soak"] },
+      { label: "Pre-wash", match: ["PreWash"] },
+      { label: "Water plus", match: ["WaterPlus"] },
       { label: "Intensive/short", match: ["IntensiveShort"] },
     ],
-    lamps: [{ label: "Door button", match: ["DoorButton"] }],
     spin: [1450, 1200, 900, 600, 400, "Rinse hold", "No final spin"],
   },
 };
@@ -124,8 +131,9 @@ const esc = (s) =>
 const NO_VALUE = new Set(["unknown", "unavailable", "none", ""]);
 
 // Splits the display text into digit cells: a point lights the previous digit's point, and a
-// space is a gap, as between the hours and the minutes on some panels
-function displayCells(text, digits) {
+// space is a gap, as between the hours and the minutes on some panels. With `groups`, the digits
+// fill the groups from the right and the gaps sit between the groups, wherever the text has them
+function displayCells(text, digits, groups) {
   const cells = [];
   for (const ch of text ?? "") {
     if (ch === ".") {
@@ -139,12 +147,25 @@ function displayCells(text, digits) {
     }
   }
   const count = cells.filter((c) => !c.gap).length;
+  const total = groups ? groups.reduce((a, b) => a + b, 0) : 0;
+  if (groups && count <= total) {
+    const lit = cells.filter((c) => !c.gap);
+    while (lit.length < total) lit.unshift({ ch: " ", dp: false });
+    const out = [];
+    let i = 0;
+    groups.forEach((n, g) => {
+      if (g) out.push({ gap: true });
+      out.push(...lit.slice(i, i + n));
+      i += n;
+    });
+    return out;
+  }
   for (let i = count; i < digits; i++) cells.unshift({ ch: " ", dp: false });
   return cells;
 }
 
-function renderDisplay(text, digits) {
-  const cells = displayCells(text, digits);
+function renderDisplay(text, digits, groups) {
+  const cells = displayCells(text, digits, groups);
   let x = 0;
   const parts = [];
   for (const cell of cells) {
@@ -356,7 +377,7 @@ class FreemduPanelCard extends HTMLElement {
   _displayBlock(preset, online) {
     const text = online ? this._val("display_contents") : null;
     const digits = preset.digits ?? Math.max(3, (text ?? "").replace(/[. ]/g, "").length);
-    return `<div class="display ${online ? "" : "dark"}" data-entity="${esc(this._entities.map.display_contents ?? "")}">${renderDisplay(text ?? "", digits)}</div>`;
+    return `<div class="display ${online ? "" : "dark"}" data-entity="${esc(this._entities.map.display_contents ?? "")}">${renderDisplay(text ?? "", digits, preset.groups)}</div>`;
   }
 
   _lamp(label, lit, extra = "") {
@@ -384,7 +405,9 @@ class FreemduPanelCard extends HTMLElement {
     }
     if (this._has("start_delay") || this._has("phase")) {
       const delayed = this._num("start_delay") !== null || /delayed/i.test(this._val("phase") ?? "");
-      lamps.push(this._lamp("Start delay", online && delayed));
+      const lamp = this._lamp("Start delay", online && delayed);
+      if (preset.delay_first) lamps.unshift(lamp);
+      else lamps.push(lamp);
     }
     return lamps.length ? `<div class="indicators">${lamps.join("")}</div>` : "";
   }
