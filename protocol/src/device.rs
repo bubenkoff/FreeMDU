@@ -8,6 +8,7 @@
 //! Use the [`connect`] function to automatically select the correct device
 //! implementation based on the devices's software ID.
 
+pub mod id1631;
 pub mod id2088;
 pub mod id218;
 pub mod id2895;
@@ -482,6 +483,9 @@ pub async fn connect<'a, P: 'a + Read + Write>(
         }
         id629::compatible_software_ids!() => {
             Ok(Box::new(id629::WashingMachine::initialize(intf, id).await?) as Box<dyn Device<P>>)
+        }
+        id1631::compatible_software_ids!() => {
+            Ok(Box::new(id1631::TumbleDryer::initialize(intf, id).await?) as Box<dyn Device<P>>)
         }
         id2088::compatible_software_ids!() => {
             Ok(Box::new(id2088::WashingMachine::initialize(intf, id).await?) as Box<dyn Device<P>>)
