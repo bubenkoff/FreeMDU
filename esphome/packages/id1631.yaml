@@ -1,0 +1,20 @@
+# Device package for tumble dryers with software ID 1631 (Miele Softtronic T 8625 C).
+#
+# For mapping only, so far. The protocol crate reads nothing from this software ID yet, so there
+# are no device entities: Connected, Software ID and the adapter's own entities come from
+# freemdu.yaml. The package logs the RAM at every poll instead; see "Mapping a new device" in the
+# README.
+#
+# The diagnostic interface answers from the H8/3064 on the ELP330 board, not from the M16C on the
+# EW151: the code at 0x0f000 is H8/300H and keeps its variables at 0xfef30-0xff329. The log covers
+# the 4 KB of on-chip RAM that ends at 0xfff1f, 0xfef20-0xfff1f. That is 256 reads at 2400 baud,
+# so give the device a long update_interval. Override `freemdu: memory_log:` for another range;
+# the length must be a multiple of 16.
+
+packages:
+  freemdu: !include freemdu.yaml
+
+freemdu:
+  memory_log:
+    address: 0xfef20
+    length: 4096
