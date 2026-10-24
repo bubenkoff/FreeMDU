@@ -6,9 +6,9 @@
 substitutions:
   # Where the component is built from. Override both to test a branch.
   freemdu_url: https://github.com/bubenkoff/FreeMDU
-  freemdu_ref: esphome
+  freemdu_ref: esphome-id1631
   # How often ESPHome fetches the component again; `always` while testing a branch
-  freemdu_refresh: 1d
+  freemdu_refresh: always
   # How often the appliance is polled. A poll of every property takes a few seconds at
   # 2400 baud; a poll that is still running when the next is due is skipped.
   update_interval: 10s
