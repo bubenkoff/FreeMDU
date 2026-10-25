@@ -312,7 +312,7 @@ The [device packages](packages) name their entities after the properties' names,
 |---|---|
 | ![The card for a W 471 and a W 925 in several states, light theme](card/demo.png) | ![The same states in a dark theme](card/demo-dark.png) |
 
-It takes its colours from the Home Assistant theme, so it follows a dark theme by itself; the display stays dark in both.
+It looks like the machines' front panel: a cream face, a black display window, amber digits and lamps, and a green lamp for a finished program, as on the W 471's Start button. In a dark theme the face turns dark grey.
 
 The component installs it if asked to, which it is not by default. With `dashboard_card: "true"` under `substitutions:` (or `dashboard_card: true` under `freemdu:` without the packages), every build copies the card to `www/freemdu/` of the Home Assistant configuration, as long as ESPHome runs inside it, as the add-on does (`/config/esphome`). Add it as a dashboard resource once (*Settings* → *Dashboards* → ⋮ → *Resources*, URL `/local/freemdu/freemdu-panel-card.js`, type *JavaScript module*), then add the card:
 
@@ -332,7 +332,7 @@ device: 0123456789abcdef0123456789abcdef  # the ESPHome device, from its page's 
 
 The resource's file is a small loader that never changes, because Home Assistant serves `/local/` with a month-long cache; it loads the card next to it, `card.js`, under that file's current ETag. So the card of a new build shows up at the next page load, with no resource to edit. If the `www` directory did not exist, Home Assistant serves it only after its next restart. Without the add-on, copy `freemdu-panel-card.js` to `/config/www/` and add it as `/local/freemdu-panel-card.js?v=1`, raising the number with each new copy.
 
-Clicking the display, the program, a reading or the status opens that entity. The display's colour is the `--freemdu-led` CSS variable, which a theme can set.
+Clicking the display, the program, a reading or the status opens that entity. A theme can set the amber of the display and the lamps with `--freemdu-led` and the colour of the face with `--freemdu-face`.
 
 A preset is a few lines in `PRESETS` at the top of the file: the number of digits and how they are grouped (the W 925 has one for the hours and two for the minutes), the lamps beside the display and their order, the option buttons in panel order, and the spin selector's settings. To add one for another machine, add a scenario to [`card/demo.html`](card/demo.html) with the states its package produces, and check it in a browser (`python3 -m http.server` in `esphome/`, then open `card/demo.html`). Home Assistant is not needed for that.
 

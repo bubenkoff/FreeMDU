@@ -8,7 +8,7 @@
 //
 // One file, no build step and no dependencies. See esphome/README.md, "Front panel card".
 
-const VERSION = "0.3.1";
+const VERSION = "0.4.0";
 
 // Entities the card looks for, by the object ID the packages give them
 const SENSORS = [
@@ -314,7 +314,8 @@ class FreemduPanelCard extends HTMLElement {
     if (key === this._lastKey) return;
     this._lastKey = key;
 
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card>${this._body()}</ha-card>`;
+    const night = this._hass?.themes?.darkMode ? "night" : "";
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card class="${night}">${this._body()}</ha-card>`;
   }
 
   _online() {
@@ -539,78 +540,114 @@ class FreemduPanelCard extends HTMLElement {
 }
 
 const STYLE = `
+  /* The look of the machines' front panels: a cream face (W 471, W 925) with a black display
+     window, amber digits and lamps, and a green lamp for a finished program, as on the W 471's
+     Start button. A dark theme gets a dark grey face. Themes can set --freemdu-led and
+     --freemdu-face. */
   :host {
-    --freemdu-led: #ff4436;
-    --freemdu-display-bg: #140908;
-    --freemdu-panel-bg: var(--secondary-background-color, rgba(127, 127, 127, 0.08));
-    --freemdu-radius: 12px;
+    --_led: var(--freemdu-led, #ffa41b);
+    --_green: #8fd61c;
+    --_radius: 8px;
   }
-  ha-card { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  ha-card {
+    --_face: var(--freemdu-face, #ebe7dc);
+    --_face-low: color-mix(in srgb, var(--_face) 92%, #8a7f68);
+    --_ink: #3a3833;
+    --_ink-soft: #6f6a60;
+    --_rule: rgba(58, 56, 51, 0.16);
+    --_key: #f8f6f0;
+    --_key-low: #e4e0d5;
+    --_key-edge: #c6c0b2;
+    --_lamp-off: #6f6b62;
+    --_plate: rgba(58, 56, 51, 0.05);
+    --ha-card-background: var(--_face);
+    padding: 16px; display: flex; flex-direction: column; gap: 14px;
+    background: linear-gradient(180deg, var(--_face) 0%, var(--_face-low) 100%);
+    color: var(--_ink);
+    border: 1px solid var(--_key-edge);
+    border-radius: var(--ha-card-border-radius, 12px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+  ha-card.night {
+    --_face: var(--freemdu-face, #2b2925);
+    --_face-low: color-mix(in srgb, var(--_face) 88%, #000);
+    --_ink: #ebe6dc;
+    --_ink-soft: #a39e93;
+    --_rule: rgba(235, 230, 220, 0.13);
+    --_key: #3c3934;
+    --_key-low: #312f2b;
+    --_key-edge: #4c4841;
+    --_lamp-off: #57534b;
+    --_plate: rgba(235, 230, 220, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
   [data-entity]:not([data-entity=""]) { cursor: pointer; }
 
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .name { font-size: 1.05em; font-weight: 500; color: var(--secondary-text-color); letter-spacing: 0.01em; }
-  .pill { position: relative; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8em; font-weight: 500; padding: 3px 10px; border-radius: 999px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; }
-  .pill::after { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0.12; border-radius: inherit; }
-  .pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .pill.run { color: var(--freemdu-led); }
-  .pill.run i { animation: pulse 1.6s ease-in-out infinite; }
-  .pill.wait { color: var(--warning-color, #ff9800); }
-  .pill.done { color: var(--success-color, #43a047); }
-  .pill.off i { opacity: 0.4; }
+  .name { font-size: 0.78em; font-weight: 600; color: var(--_ink-soft); text-transform: uppercase; letter-spacing: 0.1em; }
+  .pill { position: relative; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8em; font-weight: 500; padding: 3px 10px; border-radius: 999px; color: var(--_ink-soft); white-space: nowrap; overflow: hidden; border: 1px solid var(--_rule); }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--_lamp-off); }
+  .pill.run i { background: var(--_led); box-shadow: 0 0 4px var(--_led), 0 0 9px var(--_led); animation: pulse 1.6s ease-in-out infinite; }
+  .pill.wait i { background: var(--_led); box-shadow: 0 0 4px var(--_led); }
+  .pill.done i { background: var(--_green); box-shadow: 0 0 4px var(--_green), 0 0 9px var(--_green); }
+  .pill.run, .pill.wait, .pill.done { color: var(--_ink); }
+  .pill.off i { opacity: 0.5; }
 
-  .program .title { font-size: 1.6em; font-weight: 400; line-height: 1.2; color: var(--primary-text-color); }
-  .program .sub { margin-top: 2px; color: var(--secondary-text-color); min-height: 1.2em; }
+  .program .title { font-size: 1.6em; font-weight: 400; line-height: 1.2; color: var(--_ink); }
+  .program .sub { margin-top: 2px; color: var(--_ink-soft); min-height: 1.2em; }
 
-  .panel { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px; border-radius: calc(var(--freemdu-radius) + 4px); background: var(--freemdu-panel-bg); }
-  .display { position: relative; padding: 12px 16px; border-radius: var(--freemdu-radius); line-height: 0; overflow: hidden;
-    background: radial-gradient(120% 140% at 50% 0%, #2a1311 0%, var(--freemdu-display-bg) 60%);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 0 rgba(255, 255, 255, 0.06); }
-  .display::after { content: ""; position: absolute; inset: 0 0 55% 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0)); pointer-events: none; }
-  .digits { height: 60px; width: auto; }
-  .digits .on { fill: var(--freemdu-led); filter: drop-shadow(0 0 2px var(--freemdu-led)) drop-shadow(0 0 8px var(--freemdu-led)); }
-  .digits .off { fill: var(--freemdu-led); opacity: 0.07; }
-  .panel.off .display { background: var(--freemdu-display-bg); }
-  .panel.off .digits .off { opacity: 0.04; }
+  .panel { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .display { position: relative; padding: 10px 14px; border-radius: 4px; line-height: 0; overflow: hidden;
+    background: linear-gradient(180deg, #1b1712 0%, #0b0907 55%);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.5); }
+  ha-card.night .display { box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.06); }
+  .display::after { content: ""; position: absolute; inset: 0 0 60% 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)); pointer-events: none; }
+  .digits { height: 56px; width: auto; }
+  .digits .on { fill: var(--_led); filter: drop-shadow(0 0 1.5px var(--_led)) drop-shadow(0 0 6px var(--_led)); }
+  .digits .off { fill: var(--_led); opacity: 0.06; }
+  .panel.off .display { background: #0b0907; }
+  .panel.off .digits .off { opacity: 0.035; }
 
   .indicators, .lamps { display: flex; gap: 8px 16px; }
   .indicators { flex-direction: column; }
   .lamps { flex-wrap: wrap; }
-  .lamp { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85em; color: var(--secondary-text-color); white-space: nowrap; }
-  .lamp i, .button i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgba(127, 127, 127, 0.25); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
-  .lamp.lit { color: var(--primary-text-color); }
-  .lamp.lit i, .button.lit i { background: radial-gradient(circle at 35% 35%, #fff 0, var(--freemdu-led) 45%); box-shadow: 0 0 4px var(--freemdu-led), 0 0 10px var(--freemdu-led); }
+  .lamp { display: inline-flex; align-items: center; gap: 8px; font-size: 0.86em; color: var(--_ink); white-space: nowrap; }
+  .lamp i, .button i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, color-mix(in srgb, var(--_lamp-off) 70%, #fff) 0, var(--_lamp-off) 60%); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.35); }
+  .lamp.lit i, .button.lit i { background: radial-gradient(circle at 38% 35%, #fff6dc 0, var(--_led) 50%); box-shadow: 0 0 4px var(--_led), 0 0 10px var(--_led); }
   .lamp.fault { color: var(--error-color, #db4437); font-weight: 500; }
   .lamp.fault i { animation: pulse 1.2s ease-in-out infinite; }
 
-  .times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: var(--secondary-text-color); }
-  .times b { font-size: 1.35em; font-weight: 500; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
+  .times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: var(--_ink-soft); }
+  .times b { font-size: 1.35em; font-weight: 500; color: var(--_ink); font-variant-numeric: tabular-nums; }
 
   .stages { position: relative; display: flex; padding-top: 2px; }
   .stages::before, .stages::after { content: ""; position: absolute; top: 7px; left: var(--track-inset); height: 2px; border-radius: 1px; }
-  .stages::before { right: var(--track-inset); background: var(--divider-color); }
-  .stages::after { width: var(--track-fill); background: var(--freemdu-led); opacity: 0.6; }
-  .stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 0.78em; color: var(--secondary-text-color); text-align: center; }
-  .stage i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color, #fff)); }
-  .stage.done i { border-color: var(--freemdu-led); background: var(--freemdu-led); opacity: 0.6; }
-  .stage.lit { color: var(--primary-text-color); font-weight: 500; }
-  .stage.lit i { border-color: var(--freemdu-led); background: var(--freemdu-led); box-shadow: 0 0 0 4px var(--ha-card-background, var(--card-background-color, #fff)), 0 0 10px 4px var(--freemdu-led); }
+  .stages::before { right: var(--track-inset); background: var(--_rule); }
+  .stages::after { width: var(--track-fill); background: var(--_led); opacity: 0.7; }
+  .stage { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 0.78em; color: var(--_ink-soft); text-align: center; }
+  .stage i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--_key-edge); background: var(--_face); }
+  .stage.done i { border-color: var(--_led); background: var(--_led); opacity: 0.7; }
+  .stage.lit { color: var(--_ink); font-weight: 500; }
+  .stage.lit i { border-color: var(--_led); background: var(--_led); box-shadow: 0 0 0 4px var(--_face), 0 0 10px 4px var(--_led); }
 
   .group { display: flex; flex-direction: column; gap: 8px; }
-  .label { font-size: 0.72em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary-text-color); }
-  .buttons { display: flex; flex-wrap: wrap; gap: 5px; }
-  .button { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 0.82em; color: var(--secondary-text-color); white-space: nowrap; border: 1px solid var(--divider-color); }
-  .button.lit { color: var(--primary-text-color); border-color: var(--freemdu-led); }
-  .button.lit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--freemdu-led); opacity: 0.08; pointer-events: none; }
-  .buttons.spin .button { font-variant-numeric: tabular-nums; }
+  .label { font-size: 0.72em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--_ink-soft); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .button { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 8px; border-radius: 9px; font-size: 0.82em; color: var(--_ink); white-space: nowrap;
+    background: linear-gradient(180deg, var(--_key) 0%, var(--_key-low) 100%);
+    border: 1px solid var(--_key-edge);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 1px rgba(0, 0, 0, 0.12); }
+  ha-card.night .button { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 1px rgba(0, 0, 0, 0.4); }
+  .buttons.spin { gap: 6px 14px; }
+  .buttons.spin .button { padding: 2px 0; background: none; border: none; box-shadow: none; font-variant-numeric: tabular-nums; }
 
   .readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
-  .readout { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border-radius: var(--freemdu-radius); background: var(--freemdu-panel-bg); }
+  .readout { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: var(--_radius); background: var(--_plate); border: 1px solid var(--_rule); }
   .readout.wide { grid-column: 1 / -1; }
-  .readout span { font-size: 0.72em; color: var(--secondary-text-color); }
-  .readout b { font-size: 1.05em; font-weight: 500; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
+  .readout span { font-size: 0.72em; color: var(--_ink-soft); }
+  .readout b { font-size: 1.05em; font-weight: 500; color: var(--_ink); font-variant-numeric: tabular-nums; }
 
-  .foot { margin-top: -4px; font-size: 0.72em; color: var(--secondary-text-color); text-align: right; opacity: 0.8; }
+  .foot { margin-top: -4px; font-size: 0.72em; color: var(--_ink-soft); text-align: right; opacity: 0.8; }
   .foot:empty { display: none; }
 
   @keyframes pulse { 50% { opacity: 0.35; } }
@@ -626,5 +663,5 @@ if (!customElements.get("freemdu-panel-card")) {
     name: "FreeMDU front panel",
     description: "The front panel of a washing machine connected with FreeMDU",
   });
-  console.info(`%c FREEMDU-PANEL-CARD %c ${VERSION} `, "color: white; background: #c0392b", "");
+  console.info(`%c FREEMDU-PANEL-CARD %c ${VERSION} `, "color: #1b1712; background: #ffa41b", "");
 }

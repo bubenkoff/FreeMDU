@@ -93,9 +93,11 @@
         attributes: { friendly_name: `Washing Machine ${name}`, unit_of_measurement: UNITS[key] } };
     }
     if (prefix === "w925") delete states["sensor.w925_water_level"].attributes.unit_of_measurement;
-    return { states, entities: {}, devices: {}, locale: { language: "en-GB" } };
+    return { states, entities: {}, devices: {}, locale: { language: "en-GB" }, themes: { darkMode: DARK } };
   }
 
+  const DARK = location.search.includes("dark");
+  if (DARK) document.documentElement.dataset.theme = "dark";
   const grid = document.getElementById("grid");
   SCENARIOS.forEach(([title, prefix, values], i) => {
     const wrap = document.createElement("div");
@@ -107,11 +109,8 @@
     grid.appendChild(wrap);
   });
 
-  if (location.search.includes("dark")) document.documentElement.dataset.theme = "dark";
-  document.getElementById("theme").onclick = () => {
-    const root = document.documentElement;
-    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
-  };
+  // The card reads dark mode from hass.themes, so switching reloads the page
+  document.getElementById("theme").onclick = () => { location.search = DARK ? "" : "?dark"; };
 </script>
 </body>
 </html>
