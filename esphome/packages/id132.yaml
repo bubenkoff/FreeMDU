@@ -43,6 +43,14 @@ text_sensor:
     format: text
     id: mdu_options
     name: Options
+  # Programming-mode features (child lock, extra rinse, higher water level, gentle spin), kept
+  # across power cycles; empty when none is on
+  - platform: freemdu
+    property: special_features
+    format: text
+    id: mdu_special_features
+    name: Special Features
+    entity_category: diagnostic
   - platform: freemdu
     property: program_spin_setting
     format: text
