@@ -101,6 +101,12 @@ const PROP_PROGRAM_OPTIONS: Property = Property {
     name: "Program Options",
     unit: None,
 };
+const PROP_SPECIAL_FEATURES: Property = Property {
+    kind: PropertyKind::General,
+    id: "special_features",
+    name: "Special Features",
+    unit: None,
+};
 const PROP_PROGRAM_SPIN_SETTING: Property = Property {
     kind: PropertyKind::Operation,
     id: "program_spin_setting",
@@ -360,6 +366,26 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    /// Special feature (*Programmierfunktion*).
+    ///
+    /// Features switched on in the machine's hidden programming mode (option buttons and the
+    /// program selector, see the operating instructions). They are kept with the operating time
+    /// in the persistent block at 0x0012, so they survive a power cycle and apply to every
+    /// program. The low byte is the value at 0x0016, the high byte the value at 0x0017.
+    #[derive(FlagsDisplay, FlagsDebug, PartialEq, Eq, Copy, Clone)]
+    pub struct SpecialFeature: u16 {
+        /// Child lock: the panel ignores changes 3 minutes after a program or delay starts.
+        const ChildLock = 0x0008;
+        /// Extra rinse.
+        const ExtraRinse = 0x0040;
+        /// Higher water level.
+        const HigherWaterLevel = 0x0080;
+        /// Gentle spin: reduced drum speed.
+        const GentleSpin = 0x0200;
+    }
+}
+
 /// Washing program spin setting.
 ///
 /// Each variant represents a position of the machine's spin speed selector knob.
@@ -581,6 +607,19 @@ impl<P: Read + Write> WashingMachine<P> {
         Ok(ProgramOption::from_bits_retain(
             self.intf.read_memory(0x006c).await?,
         ))
+    }
+
+    /// Queries the special features switched on in the machine's programming mode.
+    pub async fn query_special_features(&mut self) -> Result<SpecialFeature, P::Error> {
+        // On a W 925, switching the features on one after another set 0x80, 0x40 and 0x08 at
+        // 0x0016 and 0x02 at 0x0017, and 0x0019 changed with them (0x0016 to 0x0019 XOR to the
+        // same value throughout). Bit 0x01 at 0x0016 was set in every dump and is something
+        // else, so bits that are not known features are dropped.
+        let [low, high]: [u8; 2] = self.intf.read_memory(0x0016).await?;
+
+        Ok(SpecialFeature::from_bits_truncate(u16::from_le_bytes([
+            low, high,
+        ])))
     }
 
     /// Queries the program spin setting.
@@ -809,6 +848,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
     fn properties(&self) -> &'static [Property] {
         &[
             PROP_OPERATING_TIME,
+            PROP_SPECIAL_FEATURES,
             PROP_FAULT_F1,
             PROP_FAULT_F2,
             PROP_FAULT_F3,
@@ -844,6 +884,7 @@ impl<P: Read + Write> Device<P> for WashingMachine<P> {
         match *prop {
             // General
             PROP_OPERATING_TIME => Ok(self.query_operating_time().await?.into()),
+            PROP_SPECIAL_FEATURES => Ok(self.query_special_features().await?.to_string().into()),
             // Fault
             PROP_FAULT_F1 => Ok(self.query_fault(FaultCode::LevelSwitch).await?.into()),
             PROP_FAULT_F2 => Ok(self.query_fault(FaultCode::NtcThermistor).await?.into()),
@@ -920,6 +961,20 @@ mod tests {
         assert_eq!(opts.to_string(), "PreWash | Soak");
         assert_eq!(ProgramOption::DoorButton.to_string(), "DoorButton");
         assert_eq!(ProgramOption::empty().to_string(), "");
+    }
+
+    #[test]
+    fn displays_special_features() {
+        // 0x0016 and 0x0017 on a W 925 with none, one, and all four features switched on
+        let feats = |low: u8, high: u8| {
+            SpecialFeature::from_bits_truncate(u16::from_le_bytes([low, high])).to_string()
+        };
+        assert_eq!(feats(0x01, 0x00), "");
+        assert_eq!(feats(0x81, 0x00), "HigherWaterLevel");
+        assert_eq!(
+            feats(0xc9, 0x02),
+            "ChildLock | ExtraRinse | HigherWaterLevel | GentleSpin"
+        );
     }
 
     #[test]
